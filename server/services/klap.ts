@@ -71,13 +71,13 @@ async function klapRequest<T = any>(options: KlapRequestOptions): Promise<T> {
 
 export interface VideoToShortsResponse {
   id: string;
-  status: "processing" | "complete" | "error";
+  status: "processing" | "ready" | "error";
   output_id?: string;
 }
 
 export interface TaskStatusResponse {
   id: string;
-  status: "processing" | "complete" | "error";
+  status: "processing" | "ready" | "error";
   output_id?: string;
   error?: string;
 }
@@ -91,7 +91,7 @@ export interface ProjectResponse {
 
 export interface ExportResponse {
   id: string;
-  status: "processing" | "complete" | "error";
+  status: "processing" | "ready" | "error";
   src_url?: string;
   error?: string;
 }
