@@ -675,21 +675,32 @@ async function processCompleteWorkflow(taskId: string) {
           throw new Error("Task ready but no output_id");
         }
 
-        const response = await fetch(
-          "https://n8n-familyconnection.agentglu.agency/webhook/6c65c59a-8283-47ea-b773-df5bc536b197",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              email: "bhuvaneshpatil80642@gmail.com",
-              linkToVideoDetails: "Your video has been processed successfully",
-            }),
-          },
-        );
         const folderId = klapStatus.output_id;
         console.log(`[Workflow] Task complete. Folder ID: ${folderId}`);
+
+        // Send email notification if email was provided
+        const task = await storage.getTask(taskId);
+        if (task && task.email) {
+          try {
+            const detailsUrl = `${process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 'http://localhost:5000'}/details/${taskId}`;
+            await fetch(
+              "https://n8n-familyconnection.agentglu.agency/webhook/6c65c59a-8283-47ea-b773-df5bc536b197",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  email: task.email,
+                  linkToVideoDetails: detailsUrl,
+                }),
+              },
+            );
+            console.log(`[Workflow] Email notification sent to ${task.email}`);
+          } catch (emailError) {
+            console.error(`[Workflow] Failed to send email notification:`, emailError);
+          }
+        }
 
         // Step 2: Get projects (following script)
         await fetchAndStoreProjects(taskId, folderId);
