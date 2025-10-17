@@ -22,9 +22,10 @@ export default function HomePage() {
   const { toast } = useToast();
 
   const processVideoMutation = useMutation({
-    mutationFn: async (videoUrl: string) => {
+    mutationFn: async ({ videoUrl, email }: { videoUrl: string; email: string }) => {
       const response = await apiRequest("POST", "/api/process-video", {
         url: videoUrl,
+        email: email || undefined,
       });
       return await response.json();
     },
@@ -37,6 +38,7 @@ export default function HomePage() {
       });
 
       setUrls("");
+      setEmail("");
       setTimeout(() => {
         setLocation(`/details/${data.taskId}`);
       }, 1000);
@@ -75,7 +77,7 @@ export default function HomePage() {
       return;
     }
 
-    processVideoMutation.mutate(url);
+    processVideoMutation.mutate({ videoUrl: url, email: email.trim() });
   };
 
   return (
