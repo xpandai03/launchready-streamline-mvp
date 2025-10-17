@@ -45,6 +45,14 @@ All tables follow the Klap API structure with proper foreign key relationships.
 - Automatically starts background processing
 - Returns: `{ taskId, status }`
 
+#### POST `/api/videos/bulk`
+- Creates multiple video processing tasks in parallel
+- Accepts array of video URLs (minimum 1, maximum 1000)
+- Uses Promise.allSettled for parallel processing
+- Handles partial failures gracefully
+- Returns: `{ tasks, failures, successCount, failureCount, total }`
+- Each failure includes URL and error message for debugging
+
 #### GET `/api/videos`
 - Fetches all video tasks for the current user
 - Returns array of task objects with status
@@ -82,7 +90,12 @@ All requests/responses are logged to `api_logs` table for debugging.
 
 ### Frontend Pages
 
-1. **HomePage** (`/`) - Video URL submission form with validation
+1. **HomePage** (`/`) - Video URL submission with bulk support
+   - Textarea for multiple URLs (one per line)
+   - Real-time URL counting
+   - Client-side validation for all URLs
+   - Detailed success/failure feedback
+   - Support for 1-1000 URLs per submission
 2. **VideoListPage** (`/videos`) - List of all video tasks with status badges
 3. **VideoDetailPage** (`/details/:id`) - Detailed view with:
    - Task processing status with progress bar
@@ -93,12 +106,14 @@ All requests/responses are logged to `api_logs` table for debugging.
 
 ### Key Features
 
+- **Bulk Video Processing**: Submit multiple YouTube URLs simultaneously (1-1000 videos)
+- **Parallel Task Creation**: Processes all submissions in parallel with detailed failure reporting
 - **Auto-Polling**: Detail page automatically polls backend when processing or exporting
 - **Status Badges**: Color-coded status indicators (pending, processing, complete, error)
 - **Progress Visualization**: Progress bars and step indicators for task status
 - **Virality Scores**: Each short displays its viral potential score (0-100)
 - **Export Management**: Track multiple exports per video with individual status
-- **Error Handling**: Comprehensive error states with user-friendly messages
+- **Error Handling**: Comprehensive error states with user-friendly messages, including partial failure details
 - **Responsive Design**: Works on desktop, tablet, and mobile devices
 
 ## Environment Variables
@@ -196,7 +211,15 @@ Auto-polling keeps status up-to-date in real-time without manual refresh.
 
 ## Recent Changes
 
-### 2025-10-17
+### 2025-10-17 (Bulk Processing Update)
+- **Bulk Video Processing**: Added support for submitting multiple URLs simultaneously
+- **Enhanced HomePage**: Textarea input for multiple URLs (one per line) with real-time counting
+- **Parallel Processing**: POST /api/videos/bulk endpoint processes all URLs in parallel
+- **Detailed Error Reporting**: Returns specific failure information for each failed URL
+- **Improved UX**: Toast notifications show success/failure counts with partial failure details
+- **Backend Validation**: Zod schema enforces 1-1000 URL limit with proper error messages
+
+### 2025-10-17 (Initial Release)
 - Initial implementation of complete YouTube to Shorts converter
 - Full Klap API integration with request/response logging
 - Auto-polling mechanism for real-time status updates
@@ -210,15 +233,16 @@ Auto-polling keeps status up-to-date in real-time without manual refresh.
 1. **Single User**: Currently supports only default admin user (ID: 1)
 2. **Processing Timeouts**: Tasks timeout after 30 minutes, exports after 10 minutes
 3. **No Edit Functionality**: Cannot modify shorts before export (uses Klap defaults)
-4. **No Batch Processing**: One video submission at a time
+4. **Bulk Limit**: Maximum 1000 URLs per bulk submission (configurable via validation)
 
 ## Future Enhancements
 
 - Multi-user authentication system
-- Batch video processing for multiple URLs
 - Custom editing options (captions, reframing, watermarks)
 - Local download and storage of exported shorts
 - Virality score filtering and sorting
 - Export job queuing and management
 - Webhook support for async notifications
 - Analytics dashboard for processing metrics
+- Batch status overview on VideoListPage
+- Bulk export functionality (export multiple shorts at once)
