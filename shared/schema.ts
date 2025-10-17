@@ -114,8 +114,10 @@ export const exportsRelations = relations(exports, ({ one }) => ({
 
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users);
-export const insertTaskSchema = createInsertSchema(tasks).omit({
-  id: true,
+export const insertTaskSchema = createInsertSchema(tasks, {
+  createdAt: () => z.date().optional(),
+  updatedAt: () => z.date().optional(),
+}).omit({
   createdAt: true,
   updatedAt: true,
 });
@@ -125,8 +127,10 @@ export const insertFolderSchema = createInsertSchema(folders).omit({
 export const insertProjectSchema = createInsertSchema(projects).omit({
   createdAt: true,
 });
-export const insertExportSchema = createInsertSchema(exports).omit({
-  id: true,
+export const insertExportSchema = createInsertSchema(exports, {
+  createdAt: () => z.date().optional(),
+  updatedAt: () => z.date().optional(),
+}).omit({
   createdAt: true,
   updatedAt: true,
 });

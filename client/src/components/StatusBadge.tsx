@@ -37,10 +37,11 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
 
   const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
   const Icon = config.icon;
+  const animate = 'animate' in config && config.animate;
 
   return (
     <Badge variant={config.variant} className={`gap-1.5 ${config.className} ${className || ""}`} data-testid={`badge-status-${status}`}>
-      <Icon className={`h-3 w-3 ${config.animate ? "animate-spin" : ""}`} />
+      <Icon className={`h-3 w-3 ${animate ? "animate-spin" : ""}`} />
       <span className="text-xs font-medium">{config.label}</span>
     </Badge>
   );

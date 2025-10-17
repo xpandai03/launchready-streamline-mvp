@@ -19,7 +19,7 @@ async function klapRequest<T = any>(options: KlapRequestOptions): Promise<T> {
   const { method, endpoint, body, taskId } = options;
   const url = `${KLAP_API_URL}${endpoint}`;
 
-  const logEntry: InsertApiLog = {
+  let logEntry: InsertApiLog = {
     taskId: taskId || null,
     endpoint,
     method,
@@ -43,7 +43,7 @@ async function klapRequest<T = any>(options: KlapRequestOptions): Promise<T> {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-      logEntry.responseBody = errorData;
+      logEntry.responseBody = errorData as any;
       logEntry.errorMessage = errorData.error || errorData.message || `HTTP ${response.status}`;
       
       await db.insert(apiLogs).values(logEntry);
@@ -52,7 +52,7 @@ async function klapRequest<T = any>(options: KlapRequestOptions): Promise<T> {
     }
 
     const data = await response.json();
-    logEntry.responseBody = data;
+    logEntry.responseBody = data as any;
 
     await db.insert(apiLogs).values(logEntry);
 

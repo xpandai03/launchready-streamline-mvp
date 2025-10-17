@@ -16,7 +16,8 @@ export default function HomePage() {
 
   const createVideoMutation = useMutation({
     mutationFn: async (sourceVideoUrl: string) => {
-      return apiRequest("POST", "/api/videos", { sourceVideoUrl });
+      const response = await apiRequest("POST", "/api/videos", { sourceVideoUrl });
+      return response as { taskId: string; status: string };
     },
     onSuccess: (data) => {
       toast({

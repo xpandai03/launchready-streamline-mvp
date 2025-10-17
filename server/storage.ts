@@ -59,8 +59,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Tasks
-  async createTask(insertTask: InsertTask): Promise<Task> {
-    const [task] = await db.insert(tasks).values(insertTask).returning();
+  async createTask(insertTask: InsertTask & { id?: string }): Promise<Task> {
+    const [task] = await db.insert(tasks).values(insertTask as any).returning();
     return task;
   }
 
@@ -113,8 +113,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Exports
-  async createExport(insertExport: InsertExport): Promise<Export> {
-    const [exportData] = await db.insert(exports).values(insertExport).returning();
+  async createExport(insertExport: InsertExport & { id?: string }): Promise<Export> {
+    const [exportData] = await db.insert(exports).values(insertExport as any).returning();
     return exportData;
   }
 
