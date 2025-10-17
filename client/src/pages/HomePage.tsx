@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -16,24 +22,29 @@ export default function HomePage() {
 
   const processVideoMutation = useMutation({
     mutationFn: async (videoUrl: string) => {
-      const response = await apiRequest("POST", "/api/process-video", { 
-        url: videoUrl
-      }) as unknown as { taskId: string; status: string };
-      return response;
+      const response = await apiRequest("POST", "/api/process-video", {
+        url: videoUrl,
+      });
+      return await response.json();
     },
     onSuccess: (data) => {
+      console.log(data);
       toast({
         title: "Processing Started",
-        description: "Your video is being converted. This may take several minutes.",
+        description:
+          "Your video is being converted. This may take several minutes.",
       });
-      
+
       setUrls("");
-      setLocation(`/details/${data.taskId}`);
+      setTimeout(() => {
+        setLocation(`/details/${data.taskId}`);
+      }, 1000);
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to start processing. Please try again.",
+        description:
+          error.message || "Failed to start processing. Please try again.",
         variant: "destructive",
       });
     },
@@ -41,7 +52,7 @@ export default function HomePage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!urls.trim()) {
       toast({
         title: "URL Required",
@@ -77,7 +88,8 @@ export default function HomePage() {
             YouTube to Shorts Converter
           </h1>
           <p className="text-muted-foreground">
-            Transform your long-form videos into viral-ready shorts with AI-powered analysis
+            Transform your long-form videos into viral-ready shorts with
+            AI-powered analysis
           </p>
         </div>
 
@@ -104,7 +116,8 @@ export default function HomePage() {
                   data-testid="input-video-urls"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Supports YouTube, S3, Google Cloud Storage, and public HTTP/HTTPS URLs
+                  Supports YouTube, S3, Google Cloud Storage, and public
+                  HTTP/HTTPS URLs
                 </p>
               </div>
 
@@ -142,18 +155,30 @@ export default function HomePage() {
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="text-center p-4 rounded-lg bg-card border border-card-border">
             <Zap className="h-6 w-6 text-primary mx-auto mb-2" />
-            <h3 className="text-sm font-medium text-foreground mb-1">AI-Powered</h3>
-            <p className="text-xs text-muted-foreground">Automatic clip selection</p>
+            <h3 className="text-sm font-medium text-foreground mb-1">
+              AI-Powered
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Automatic clip selection
+            </p>
           </div>
           <div className="text-center p-4 rounded-lg bg-card border border-card-border">
             <TrendingUp className="h-6 w-6 text-primary mx-auto mb-2" />
-            <h3 className="text-sm font-medium text-foreground mb-1">Virality Score</h3>
-            <p className="text-xs text-muted-foreground">Ranked by engagement potential</p>
+            <h3 className="text-sm font-medium text-foreground mb-1">
+              Virality Score
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Ranked by engagement potential
+            </p>
           </div>
           <div className="text-center p-4 rounded-lg bg-card border border-card-border">
             <Video className="h-6 w-6 text-primary mx-auto mb-2" />
-            <h3 className="text-sm font-medium text-foreground mb-1">Auto-Export</h3>
-            <p className="text-xs text-muted-foreground">Automatic conversion & export</p>
+            <h3 className="text-sm font-medium text-foreground mb-1">
+              Auto-Export
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Automatic conversion & export
+            </p>
           </div>
         </div>
       </div>
