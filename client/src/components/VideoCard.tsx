@@ -41,7 +41,7 @@ export function VideoCard({ task }: VideoCardProps) {
                   <Calendar className="h-3.5 w-3.5" />
                   <span>{formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}</span>
                 </div>
-                {task.status === "complete" && task.outputId && (
+                {task.status === "ready" && task.outputId && (
                   <div className="flex items-center gap-1.5">
                     <TrendingUp className="h-3.5 w-3.5 text-chart-3" />
                     <span className="text-chart-3 font-medium">Shorts generated</span>

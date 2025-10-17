@@ -20,7 +20,7 @@ export function ShortCard({ project, exportData, onExport, isExporting }: ShortC
     return "bg-muted/50 text-muted-foreground";
   };
 
-  const canDownload = exportData?.status === "complete" && exportData.srcUrl;
+  const canDownload = exportData?.status === "ready" && exportData.srcUrl;
   const isProcessingExport = exportData?.status === "processing" || isExporting;
 
   return (
