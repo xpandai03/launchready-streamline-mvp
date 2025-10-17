@@ -1,0 +1,99 @@
+const API_URL = "https://api.klap.video/v2";
+const API_KEY = "<your-api-key>";
+const INPUT_VIDEO_URL = "<your-video-url>";
+ 
+const postRequest = async (url, body = {}) => {
+  const response = await fetch(`${API_URL}${url}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+ 
+  return response.ok ? response.json() : Promise.reject(await response.json());
+};
+ 
+const getRequest = async (url) => {
+  const response = await fetch(`${API_URL}${url}`, {
+    headers: { Authorization: `Bearer ${API_KEY}` },
+  });
+  return response.json();
+};
+ 
+const pollStatus = async (url, checkKey, checkValue) => {
+  let resJson;
+ 
+  do {
+    resJson = await getRequest(url);
+    console.log(
+      `[${new Date().toLocaleTimeString()}] Polling ${url} while ${checkKey} === ${checkValue}...`
+    );
+    await new Promise((r) => setTimeout(r, 30000));
+  } while (resJson[checkKey] === checkValue);
+  return resJson;
+};
+ 
+const generateShorts = async (inputVideoUrl) => {
+  let task = await postRequest("/tasks/video-to-shorts", {
+    source_video_url: inputVideoUrl,
+    language: "en",
+    max_duration: 30,
+    max_clip_count: 2,
+    editing_options: {
+      intro_title: false,
+    },
+  });
+ 
+  console.log(`Task created: ${task.id}. Processing...`);
+  task = await pollStatus(`/tasks/${task.id}`, "status", "processing");
+  console.log(`Task processing done: ${task.id}.`);
+  if (task.status == "error") throw Error("Task processing failed.");
+ 
+  const projectFolderId = task.output_id;
+ 
+  console.log(`Result in folder: ${projectFolderId}`);
+ 
+  const projects = await getRequest(`/projects/${projectFolderId}`);
+  return projects;
+};
+ 
+const exportProject = async (folderId, projectId) => {
+  const project = await getRequest(`/projects/${folderId}/${projectId}`);
+  console.log(`Exporting project: ${project.id}...`);
+  let exportRes = await postRequest(
+    `/projects/${folderId}/${project.id}/exports`,
+    {
+      watermark: {
+        src_url: "https://studio.restream.io/logos/default.png",
+        pos_x: 0.5,
+        pos_y: 0.5,
+        scale: 1,
+      },
+    }
+  );
+  console.log(`Export started: ${exportRes.id}.`);
+  exportRes = await pollStatus(
+    `/projects/${folderId}/${project.id}/exports/${exportRes.id}`,
+    "status",
+    "processing"
+  );
+  if (exportRes.status == "error") throw Error("Export failed.");
+  return exportRes;
+};
+ 
+const main = async () => {
+  const projects = await generateShorts(INPUT_VIDEO_URL);
+  console.log(`Generated ${projects.length} projects.`);
+  projects.forEach((project) =>
+    console.log(`"${project.name}" Virality Score: ${project.virality_score}`)
+  );
+ 
+  // export the first project
+  const project = projects[0];
+  const exportRes = await exportProject(project.folder_id, project.id);
+  console.log(`Export done: ${exportRes.src_url}.`);
+};
+ 
+main();

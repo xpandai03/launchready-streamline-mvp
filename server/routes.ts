@@ -267,6 +267,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/process-video - Simple one-click workflow following exact script pattern
+  app.post("/api/process-video", async (req, res) => {
+    try {
+      const { url } = z.object({ url: z.string().url() }).parse(req.body);
+
+      // Step 1: Create task via Klap API
+      const klapTask = await klapService.createVideoToShortsTask(url);
+
+      // Step 2: Save task in database
+      const task = await storage.createTask({
+        id: klapTask.id,
+        userId: DEFAULT_USER_ID,
+        sourceVideoUrl: url,
+        status: klapTask.status,
+        outputId: null,
+        errorMessage: null,
+        klapResponse: klapTask as any,
+        autoExportRequested: "true",
+        autoExportStatus: "pending",
+      });
+
+      // Step 3: Start background workflow (follows exact script)
+      processCompleteWorkflow(task.id).catch(console.error);
+
+      res.json({ taskId: task.id, status: "processing" });
+    } catch (error: any) {
+      console.error("Error starting video processing:", error);
+      res.status(400).json({ error: error.message || "Failed to start processing" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
@@ -533,5 +564,118 @@ async function pollExportStatusSync(exportId: string, folderId: string, projectI
       errorMessage: error instanceof Error ? error.message : "Export polling failed",
     });
     throw error;
+  }
+}
+
+// Complete workflow following exact script pattern
+async function processCompleteWorkflow(taskId: string) {
+  try {
+    console.log(`[Workflow] Starting complete workflow for task ${taskId}`);
+    
+    // Step 1: Poll task until complete (following script pattern)
+    let attempts = 0;
+    const maxAttempts = 60; // 30 minutes
+    
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 30000)); // 30 seconds
+      
+      const klapStatus = await klapService.getTaskStatus(taskId);
+      
+      await storage.updateTask(taskId, {
+        status: klapStatus.status,
+        outputId: klapStatus.output_id || null,
+        errorMessage: klapStatus.error || null,
+        klapResponse: klapStatus as any,
+      });
+      
+      console.log(`[Workflow] Task ${taskId} status: ${klapStatus.status}`);
+      
+      if (klapStatus.status === "complete") {
+        if (!klapStatus.output_id) {
+          throw new Error("Task complete but no output_id");
+        }
+        
+        const folderId = klapStatus.output_id;
+        console.log(`[Workflow] Task complete. Folder ID: ${folderId}`);
+        
+        // Step 2: Get projects (following script)
+        await fetchAndStoreProjects(taskId, folderId);
+        const projects = await storage.getProjectsByTask(taskId);
+        
+        if (projects.length === 0) {
+          throw new Error("No projects found");
+        }
+        
+        console.log(`[Workflow] Generated ${projects.length} projects`);
+        
+        // Step 3: Export first project (following script)
+        const firstProject = projects[0];
+        console.log(`[Workflow] Exporting first project: ${firstProject.id}`);
+        
+        await storage.updateTask(taskId, {
+          autoExportStatus: "processing",
+        });
+        
+        const exportResponse = await klapService.createExport(
+          folderId,
+          firstProject.id,
+          taskId
+        );
+        
+        const exportData = await storage.createExport({
+          id: exportResponse.id,
+          projectId: firstProject.id,
+          folderId,
+          taskId,
+          status: exportResponse.status,
+          srcUrl: exportResponse.src_url || null,
+          errorMessage: exportResponse.error || null,
+          klapResponse: exportResponse as any,
+          isAutoExport: "true",
+        });
+        
+        console.log(`[Workflow] Export started: ${exportData.id}`);
+        
+        // Step 4: Poll export until complete (following script)
+        const finalExport = await pollExportStatusSync(
+          exportData.id,
+          folderId,
+          firstProject.id,
+          taskId
+        );
+        
+        if (finalExport.status === "complete") {
+          const srcUrl = 'src_url' in finalExport ? finalExport.src_url : null;
+          console.log(`[Workflow] Export complete! URL: ${srcUrl}`);
+          
+          await storage.updateTask(taskId, {
+            autoExportStatus: "complete",
+            autoExportCompletedAt: new Date(),
+          });
+        } else {
+          throw new Error("Export failed");
+        }
+        
+        break;
+      } else if (klapStatus.status === "error") {
+        throw new Error("Task processing failed");
+      }
+      
+      attempts++;
+    }
+    
+    if (attempts >= maxAttempts) {
+      throw new Error("Task timeout after 30 minutes");
+    }
+    
+  } catch (error) {
+    console.error(`[Workflow] Error in complete workflow:`, error);
+    await storage.updateTask(taskId, {
+      status: "error",
+      errorMessage: error instanceof Error ? error.message : "Workflow failed",
+      autoExportStatus: "error",
+      autoExportError: error instanceof Error ? error.message : "Workflow failed",
+      autoExportCompletedAt: new Date(),
+    });
   }
 }

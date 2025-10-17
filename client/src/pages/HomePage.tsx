@@ -14,39 +14,21 @@ export default function HomePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const createBulkVideoMutation = useMutation({
-    mutationFn: async (videoUrls: string[]) => {
-      const response = await apiRequest("POST", "/api/videos/bulk", { 
-        urls: videoUrls,
-        autoExport: true // Enable auto-export by default
-      });
-      return response as { 
-        tasks: Array<{ taskId: string; status: string; url: string }>, 
-        failures: Array<{ url: string; error: string }>,
-        successCount: number, 
-        failureCount: number 
-      };
+  const processVideoMutation = useMutation({
+    mutationFn: async (videoUrl: string) => {
+      const response = await apiRequest("POST", "/api/process-video", { 
+        url: videoUrl
+      }) as unknown as { taskId: string; status: string };
+      return response;
     },
     onSuccess: (data) => {
-      const { successCount, failureCount, failures } = data;
-      
-      if (failureCount > 0 && failures && failures.length > 0) {
-        // Show detailed error for failures
-        const failedUrls = failures.map(f => f.url).join(', ');
-        toast({
-          title: `Partially Successful`,
-          description: `${successCount} video${successCount !== 1 ? 's' : ''} submitted. ${failureCount} failed: ${failedUrls.substring(0, 50)}${failedUrls.length > 50 ? '...' : ''}`,
-          variant: failureCount === data.tasks.length + failureCount ? "destructive" : "default",
-        });
-      } else {
-        toast({
-          title: `Processing Started`,
-          description: `${successCount} video${successCount !== 1 ? 's' : ''} submitted successfully.`,
-        });
-      }
+      toast({
+        title: "Processing Started",
+        description: "Your video is being converted. This may take several minutes.",
+      });
       
       setUrls("");
-      setLocation("/videos");
+      setLocation(`/details/${data.taskId}`);
     },
     onError: (error: any) => {
       toast({
@@ -62,43 +44,27 @@ export default function HomePage() {
     
     if (!urls.trim()) {
       toast({
-        title: "URLs Required",
-        description: "Please enter at least one video URL.",
+        title: "URL Required",
+        description: "Please enter a video URL.",
         variant: "destructive",
       });
       return;
     }
 
-    // Parse URLs (one per line)
-    const urlList = urls
-      .split('\n')
-      .map(url => url.trim())
-      .filter(url => url.length > 0);
+    const url = urls.trim();
 
-    if (urlList.length === 0) {
+    // Validate URL
+    if (!url.match(/^https?:\/\/.+/)) {
       toast({
-        title: "No Valid URLs",
-        description: "Please enter at least one valid URL.",
+        title: "Invalid URL",
+        description: "Please use a valid HTTP/HTTPS URL.",
         variant: "destructive",
       });
       return;
     }
 
-    // Validate all URLs
-    const invalidUrls = urlList.filter(url => !url.match(/^https?:\/\/.+/));
-    if (invalidUrls.length > 0) {
-      toast({
-        title: "Invalid URLs",
-        description: `${invalidUrls.length} URL${invalidUrls.length !== 1 ? 's are' : ' is'} invalid. Please use HTTP/HTTPS URLs.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    createBulkVideoMutation.mutate(urlList);
+    processVideoMutation.mutate(url);
   };
-
-  const urlCount = urls.split('\n').filter(url => url.trim().length > 0).length;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -118,49 +84,42 @@ export default function HomePage() {
         <Card data-testid="card-url-input">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <ListVideo className="h-5 w-5" />
-              Submit Video URLs
+              <Video className="h-5 w-5" />
+              Submit Video URL
             </CardTitle>
             <CardDescription>
-              Enter one or more video URLs (one per line) to generate short clips
+              Enter a YouTube or video URL to generate viral-ready short clips
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="video-urls">Video URLs</Label>
+                <Label htmlFor="video-urls">Video URL</Label>
                 <Textarea
                   id="video-urls"
-                  placeholder="https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/watch?v=...&#10;https://youtu.be/..."
+                  placeholder="https://www.youtube.com/watch?v=..."
                   value={urls}
                   onChange={(e) => setUrls(e.target.value)}
-                  className="min-h-32 text-base font-mono resize-y"
+                  className="min-h-24 text-base font-mono resize-none"
                   data-testid="input-video-urls"
                 />
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    Supports YouTube, S3, Google Cloud Storage, and public HTTP/HTTPS URLs
-                  </p>
-                  {urlCount > 0 && (
-                    <p className="text-xs font-medium text-primary">
-                      {urlCount} URL{urlCount !== 1 ? 's' : ''}
-                    </p>
-                  )}
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Supports YouTube, S3, Google Cloud Storage, and public HTTP/HTTPS URLs
+                </p>
               </div>
 
               <Button
                 type="submit"
                 className="w-full h-12 text-base"
-                disabled={createBulkVideoMutation.isPending}
+                disabled={processVideoMutation.isPending}
                 data-testid="button-submit-urls"
               >
-                {createBulkVideoMutation.isPending ? (
-                  <>Processing {urlCount} video{urlCount !== 1 ? 's' : ''}...</>
+                {processVideoMutation.isPending ? (
+                  <>Processing Video...</>
                 ) : (
                   <>
                     <Sparkles className="h-5 w-5 mr-2" />
-                    Generate Shorts {urlCount > 0 ? `(${urlCount})` : ''}
+                    Convert to Shorts
                   </>
                 )}
               </Button>
@@ -180,9 +139,9 @@ export default function HomePage() {
             <p className="text-xs text-muted-foreground">Ranked by engagement potential</p>
           </div>
           <div className="text-center p-4 rounded-lg bg-card border border-card-border">
-            <ListVideo className="h-6 w-6 text-primary mx-auto mb-2" />
-            <h3 className="text-sm font-medium text-foreground mb-1">Bulk Processing</h3>
-            <p className="text-xs text-muted-foreground">Submit multiple videos at once</p>
+            <Video className="h-6 w-6 text-primary mx-auto mb-2" />
+            <h3 className="text-sm font-medium text-foreground mb-1">Auto-Export</h3>
+            <p className="text-xs text-muted-foreground">Automatic conversion & export</p>
           </div>
         </div>
       </div>
