@@ -90,7 +90,7 @@
   - Left: Video thumbnail placeholder (if available) or video icon
   - Center: Title/URL (truncated), submission timestamp, status badge
   - Right: Virality scores (if available), action menu
-- **Status Badges:** Colored pills with icons (pending, processing, complete, error)
+- **Status Badges:** Colored pills with icons (pending, processing, ready, error)
 - **Empty State:** Centered message with illustration placeholder when no records
 
 ### Detail/Status Page (details/:id)

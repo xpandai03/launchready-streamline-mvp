@@ -111,7 +111,7 @@ All requests/responses are logged to `api_logs` table for debugging.
 - **Parallel Task Creation**: Processes all submissions in parallel with detailed failure reporting
 - **Unified Progress Tracking**: Shows complete pipeline status (Converting → Exporting 1/N → Complete)
 - **Auto-Polling**: Detail page automatically polls backend when processing or exporting
-- **Status Badges**: Color-coded status indicators (pending, processing, complete, error, partial_error)
+- **Status Badges**: Color-coded status indicators (pending, processing, ready, error, partial_error)
 - **Progress Visualization**: Progress bars and step indicators for complete pipeline status
 - **Virality Scores**: Each short displays its viral potential score (0-100)
 - **Intelligent Export Management**: Auto-export for hands-free workflow or manual export for selective control
