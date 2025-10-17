@@ -161,4 +161,102 @@ export const klapService = {
       taskId,
     });
   },
+
+  /**
+   * Complete workflow: Convert YouTube URL to shorts and export the first one
+   * Replicates the exact behavior from the reference Node.js script
+   */
+  async processYoutubeUrl(youtubeUrl: string): Promise<{
+    task: TaskStatusResponse;
+    projects: ProjectResponse[];
+    export: ExportResponse;
+  }> {
+    // Step 1: Create video-to-shorts task
+    let task = await klapRequest<VideoToShortsResponse>({
+      method: "POST",
+      endpoint: "/tasks/video-to-shorts",
+      body: {
+        source_video_url: youtubeUrl,
+        language: "en",
+        max_duration: 30,
+        max_clip_count: 2,
+        editing_options: {
+          intro_title: false,
+        },
+      },
+    });
+
+    console.log(`Task created: ${task.id}. Processing...`);
+
+    // Step 2: Poll task status until complete
+    let pollCount = 0;
+    while (task.status === "processing") {
+      await new Promise((resolve) => setTimeout(resolve, 30000)); // Wait 30 seconds
+      pollCount++;
+      
+      task = await klapRequest<TaskStatusResponse>({
+        method: "GET",
+        endpoint: `/tasks/${task.id}`,
+      });
+      
+      console.log(`[${new Date().toLocaleTimeString()}] Poll #${pollCount}: Task ${task.id} - status = ${task.status}`);
+    }
+
+    console.log(`Task processing done: ${task.id}.`);
+    if (task.status === "error") {
+      throw new Error("Task processing failed.");
+    }
+
+    const projectFolderId = task.output_id!;
+    console.log(`Result in folder: ${projectFolderId}`);
+
+    // Step 3: Get projects
+    const projects = await klapRequest<ProjectResponse[]>({
+      method: "GET",
+      endpoint: `/projects/${projectFolderId}`,
+    });
+
+    console.log(`Generated ${projects.length} projects.`);
+    projects.forEach((project) =>
+      console.log(`"${project.name}" Virality Score: ${project.virality_score}`)
+    );
+
+    // Step 4: Export the first project
+    const project = projects[0];
+    console.log(`Exporting project: ${project.id}...`);
+    
+    let exportRes = await klapRequest<ExportResponse>({
+      method: "POST",
+      endpoint: `/projects/${projectFolderId}/${project.id}/exports`,
+      body: {},
+    });
+
+    console.log(`Export started: ${exportRes.id}.`);
+
+    // Step 5: Poll export status until complete
+    pollCount = 0;
+    while (exportRes.status === "processing") {
+      await new Promise((resolve) => setTimeout(resolve, 30000)); // Wait 30 seconds
+      pollCount++;
+      
+      exportRes = await klapRequest<ExportResponse>({
+        method: "GET",
+        endpoint: `/projects/${projectFolderId}/${project.id}/exports/${exportRes.id}`,
+      });
+      
+      console.log(`[${new Date().toLocaleTimeString()}] Poll #${pollCount}: Export ${exportRes.id} - status = ${exportRes.status}`);
+    }
+
+    if (exportRes.status === "error") {
+      throw new Error("Export failed.");
+    }
+
+    console.log(`Export done: ${exportRes.src_url}.`);
+
+    return {
+      task,
+      projects,
+      export: exportRes,
+    };
+  },
 };
