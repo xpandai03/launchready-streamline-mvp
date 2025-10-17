@@ -231,7 +231,7 @@ export default function VideoDetailPage() {
                     key={project.id}
                     project={project}
                     exportData={exportData}
-                    onExport={showExportButtons ? exportMutation.mutate : undefined}
+                    onExport={showExportButtons ? (projectId: string) => exportMutation.mutate(projectId) : undefined}
                     isExporting={exportMutation.isPending && exportMutation.variables === project.id}
                   />
                 );

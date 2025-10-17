@@ -19,16 +19,6 @@ async function klapRequest<T = any>(options: KlapRequestOptions): Promise<T> {
   const { method, endpoint, body, taskId } = options;
   const url = `${KLAP_API_URL}${endpoint}`;
 
-  let logEntry: InsertApiLog = {
-    taskId: taskId || null,
-    endpoint,
-    method,
-    requestBody: body || null,
-    responseBody: null,
-    statusCode: null,
-    errorMessage: null,
-  };
-
   try {
     const response = await fetch(url, {
       method,
@@ -39,7 +29,15 @@ async function klapRequest<T = any>(options: KlapRequestOptions): Promise<T> {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    logEntry.statusCode = response.status;
+    const logEntry: InsertApiLog = {
+      taskId: taskId || null,
+      endpoint,
+      method,
+      requestBody: body || null,
+      responseBody: null,
+      statusCode: response.status,
+      errorMessage: null,
+    };
 
     if (!response.ok) {
       const errorData = await response
@@ -49,7 +47,7 @@ async function klapRequest<T = any>(options: KlapRequestOptions): Promise<T> {
       logEntry.errorMessage =
         errorData.error || errorData.message || `HTTP ${response.status}`;
 
-      await db.insert(apiLogs).values(logEntry);
+      await db.insert(apiLogs).values([logEntry]);
 
       throw new Error(logEntry.errorMessage);
     }
@@ -57,14 +55,20 @@ async function klapRequest<T = any>(options: KlapRequestOptions): Promise<T> {
     const data = await response.json();
     logEntry.responseBody = data as any;
 
-    await db.insert(apiLogs).values(logEntry);
+    await db.insert(apiLogs).values([logEntry]);
 
     return data;
   } catch (error: any) {
-    if (!logEntry.errorMessage) {
-      logEntry.errorMessage = error.message || "Request failed";
-      await db.insert(apiLogs).values(logEntry);
-    }
+    const errorLog: InsertApiLog = {
+      taskId: taskId || null,
+      endpoint,
+      method,
+      requestBody: body || null,
+      responseBody: null,
+      statusCode: null,
+      errorMessage: error.message || "Request failed",
+    };
+    await db.insert(apiLogs).values([errorLog]);
     throw error;
   }
 }

@@ -2,13 +2,14 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Download, Play, Sparkles } from "lucide-react";
+import { VideoPreview } from "./VideoPreview";
 import type { Project, Export } from "@shared/schema";
 
 interface ShortCardProps {
   project: Project;
   exportData?: Export;
-  onExport: (projectId: string) => void;
-  isExporting: boolean;
+  onExport?: (projectId: string) => void;
+  isExporting?: boolean;
 }
 
 export function ShortCard({ project, exportData, onExport, isExporting }: ShortCardProps) {
@@ -22,24 +23,39 @@ export function ShortCard({ project, exportData, onExport, isExporting }: ShortC
 
   const canDownload = exportData?.status === "ready" && exportData.srcUrl;
   const isProcessingExport = exportData?.status === "processing" || isExporting;
+  const hasVideo = exportData?.srcUrl;
 
   return (
     <Card className="overflow-hidden" data-testid={`card-short-${project.id}`}>
-      <div className="aspect-video bg-muted relative group">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-16 h-16 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center group-hover:bg-primary/80 transition-colors">
-            <Play className="h-7 w-7 text-foreground group-hover:text-primary-foreground transition-colors" />
-          </div>
+      {hasVideo ? (
+        <div className="relative">
+          <VideoPreview src={exportData.srcUrl!} title={project.name} />
+          {project.viralityScore !== null && (
+            <div className="absolute top-3 right-3 z-10">
+              <Badge className={`gap-1.5 ${getViralityColor(project.viralityScore)}`} data-testid={`badge-virality-${project.id}`}>
+                <Sparkles className="h-3 w-3" />
+                <span className="text-xs font-semibold">{project.viralityScore}%</span>
+              </Badge>
+            </div>
+          )}
         </div>
-        {project.viralityScore !== null && (
-          <div className="absolute top-3 right-3">
-            <Badge className={`gap-1.5 ${getViralityColor(project.viralityScore)}`} data-testid={`badge-virality-${project.id}`}>
-              <Sparkles className="h-3 w-3" />
-              <span className="text-xs font-semibold">{project.viralityScore}%</span>
-            </Badge>
+      ) : (
+        <div className="aspect-[9/16] bg-muted relative group">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center group-hover:bg-primary/80 transition-colors">
+              <Play className="h-7 w-7 text-foreground group-hover:text-primary-foreground transition-colors" />
+            </div>
           </div>
-        )}
-      </div>
+          {project.viralityScore !== null && (
+            <div className="absolute top-3 right-3">
+              <Badge className={`gap-1.5 ${getViralityColor(project.viralityScore)}`} data-testid={`badge-virality-${project.id}`}>
+                <Sparkles className="h-3 w-3" />
+                <span className="text-xs font-semibold">{project.viralityScore}%</span>
+              </Badge>
+            </div>
+          )}
+        </div>
+      )}
       
       <CardContent className="p-4">
         <h4 className="text-sm font-medium text-foreground line-clamp-2">
@@ -65,7 +81,7 @@ export function ShortCard({ project, exportData, onExport, isExporting }: ShortC
               Download
             </a>
           </Button>
-        ) : (
+        ) : onExport ? (
           <Button
             onClick={() => onExport(project.id)}
             disabled={isProcessingExport || !!exportData}
@@ -80,6 +96,15 @@ export function ShortCard({ project, exportData, onExport, isExporting }: ShortC
             ) : (
               <>Export Short</>
             )}
+          </Button>
+        ) : (
+          <Button
+            disabled
+            className="flex-1"
+            size="sm"
+            variant="outline"
+          >
+            {exportData?.status === "processing" ? "Exporting..." : "Exported"}
           </Button>
         )}
       </CardFooter>

@@ -19,7 +19,7 @@ export const tasks = pgTable("tasks", {
   outputId: text("output_id"), // folder_id when ready
   errorMessage: text("error_message"),
   klapResponse: jsonb("klap_response"), // Full Klap API response
-  autoExportRequested: text("auto_export_requested").default("false").notNull(), // false, true
+  autoExportRequested: text("auto_export_requested").default(sql`'false'`).notNull(), // false, true
   autoExportStatus: text("auto_export_status"), // pending, processing, ready, partial_error, error
   autoExportError: text("auto_export_error"),
   autoExportCompletedAt: timestamp("auto_export_completed_at"),
