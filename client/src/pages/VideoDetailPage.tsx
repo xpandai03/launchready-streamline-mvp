@@ -100,22 +100,22 @@ export default function VideoDetailPage() {
     
     if (isAutoExport) {
       if (task.autoExportStatus === "processing") {
-        const completedExports = exports.filter(e => e.status === "complete").length;
+        const completedExports = exports.filter(e => e.status === "ready").length;
         const totalExports = projects.length;
         return totalExports > 0 ? `Exporting ${completedExports}/${totalExports} shorts...` : "Exporting...";
       }
-      if (task.autoExportStatus === "complete") return "All shorts ready for download";
+      if (task.autoExportStatus === "ready") return "All shorts ready for download";
       if (task.autoExportStatus === "partial_error") return "Some exports failed";
       if (task.autoExportStatus === "error") return "Export failed";
-      if (task.autoExportStatus === "pending" && task.status === "complete") return "Starting auto-export...";
+      if (task.autoExportStatus === "pending" && task.status === "ready") return "Starting auto-export...";
     }
     
-    if (task.status === "complete") return "Conversion complete";
+    if (task.status === "ready") return "Conversion complete";
     return task.status;
   };
 
   const pipelineStatus = getPipelineStatus();
-  const showExportButtons = !isAutoExport && task.status === "complete";
+  const showExportButtons = !isAutoExport && task.status === "ready";
 
   return (
     <div className="min-h-screen bg-background">
@@ -154,12 +154,12 @@ export default function VideoDetailPage() {
                   <p className="text-sm font-medium text-foreground">{pipelineStatus}</p>
                   {task.autoExportStatus === "processing" && (
                     <p className="text-xs text-muted-foreground">
-                      {exports.filter(e => e.status === "complete").length} of {projects.length} complete
+                      {exports.filter(e => e.status === "ready").length} of {projects.length} complete
                     </p>
                   )}
                 </div>
                 <ProgressBar 
-                  status={task.autoExportStatus === "complete" || task.autoExportStatus === "partial_error" ? "complete" : "processing"} 
+                  status={task.autoExportStatus === "ready" || task.autoExportStatus === "partial_error" ? "ready" : "processing"} 
                 />
               </div>
             ) : (
@@ -183,7 +183,7 @@ export default function VideoDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">
-                  {isAutoExport && task.autoExportStatus === "complete" ? "Ready to Download" : "Shorts Generated"}
+                  {isAutoExport && task.autoExportStatus === "ready" ? "Ready to Download" : "Shorts Generated"}
                 </p>
                 <p className="text-sm font-medium text-foreground">{projects.length}</p>
               </div>
@@ -240,7 +240,7 @@ export default function VideoDetailPage() {
           </div>
         )}
 
-        {task.status === "complete" && projects.length === 0 && (
+        {task.status === "ready" && projects.length === 0 && (
           <Card>
             <CardContent className="py-12 text-center">
               <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
