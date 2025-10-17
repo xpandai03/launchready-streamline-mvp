@@ -671,11 +671,6 @@ async function processCompleteWorkflow(taskId: string) {
           throw new Error("Task ready but no output_id");
         }
 
-        const folderId = klapStatus.output_id;
-        console.log(`[Workflow] Task complete. Folder ID: ${folderId}`);
-
-        // Step 2: Get projects (following script)
-        await fetchAndStoreProjects(taskId, folderId);
         const response = await fetch(
           "https://n8n-familyconnection.agentglu.agency/webhook/6c65c59a-8283-47ea-b773-df5bc536b197",
           {
@@ -689,6 +684,11 @@ async function processCompleteWorkflow(taskId: string) {
             }),
           },
         );
+        const folderId = klapStatus.output_id;
+        console.log(`[Workflow] Task complete. Folder ID: ${folderId}`);
+
+        // Step 2: Get projects (following script)
+        await fetchAndStoreProjects(taskId, folderId);
 
         const projects = await storage.getProjectsByTask(taskId);
 
