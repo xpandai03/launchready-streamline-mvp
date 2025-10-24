@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Video, Sparkles, Zap, TrendingUp, ListVideo } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -109,18 +109,18 @@ export default function HomePage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="video-urls">Video URL</Label>
-                <Textarea
-                  id="video-urls"
+                <Label htmlFor="video-url">Video URL</Label>
+                <Input
+                  id="video-url"
+                  type="url"
                   placeholder="https://www.youtube.com/watch?v=..."
                   value={urls}
                   onChange={(e) => setUrls(e.target.value)}
-                  className="min-h-24 text-base font-mono resize-none"
-                  data-testid="input-video-urls"
+                  className="text-base font-mono"
+                  data-testid="input-video-url"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Supports YouTube, S3, Google Cloud Storage, and public
-                  HTTP/HTTPS URLs
+                  Supports YouTube, S3, Google Cloud Storage, and public HTTP/HTTPS URLs
                 </p>
               </div>
 
