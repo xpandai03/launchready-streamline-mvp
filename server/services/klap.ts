@@ -123,11 +123,13 @@ export const klapService = {
     // Add target_clip_count if provided (API parameter name)
     if (options?.targetClipCount) {
       body.target_clip_count = options.targetClipCount;
+      body.max_clip_count = options.targetClipCount;
     }
 
     // Add min_duration if provided (API parameter name)
     if (options?.minimumDuration) {
       body.min_duration = options.minimumDuration;
+      body.max_duration = options.minimumDuration;
     }
 
     return klapRequest<VideoToShortsResponse>({
