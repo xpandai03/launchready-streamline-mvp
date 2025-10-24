@@ -42,9 +42,23 @@ The application uses a utility-focused SaaS design with a "status-first" approac
     - `GET /api/videos`: Fetches all video tasks.
     - `GET /api/videos/:id`: Fetches detailed task info, updates status, and stores projects/exports.
     - `POST /api/videos/:id/export`: Triggers export for a specific short.
-    - `POST /api/process-video-advanced`: Advanced endpoint with custom processing parameters (targetClipCount, minimumDuration).
+    - `POST /api/process-video-advanced`: Advanced endpoint with custom Klap API parameters (targetClipCount: 1-10, minimumDuration: 1-180s).
 - **Background Processing**: Asynchronous polling of Klap API for video processing (30s intervals, max 30 min) and export processing (15s intervals, max 10 min).
 
 ## External Dependencies
 - **Klap API**: Core service for video-to-shorts processing, task management, project fetching, and export creation.
+  - **Custom Parameters**: Integrated support for `target_clip_count` and `min_duration` parameters
+  - **API Endpoint**: `POST /v2/tasks/video-to-shorts` with customizable clip generation settings
 - **PostgreSQL (Neon)**: Managed relational database for persistent storage.
+
+## Recent Updates
+
+### 2025-10-24 (Klap API Parameter Integration)
+- **Klap API Documentation**: Reviewed official Klap API docs at https://docs.klap.app/endpoints/tasks
+- **Service Layer Update**: Modified `createVideoToShortsTask` in `klapService` to accept optional parameters
+- **Parameter Mapping**: 
+  - `targetClipCount` → `target_clip_count` (Klap API parameter)
+  - `minimumDuration` → `min_duration` (Klap API parameter)
+- **Backward Compatible**: Existing endpoints continue to work; parameters are optional
+- **Full Integration**: `/api/process-video-advanced` now passes custom parameters directly to Klap API
+- **UI Controls**: Target Clip Count (1-10, default: 3) and Minimum Duration (1-180s, default: 30s) sliders fully functional

@@ -100,23 +100,40 @@ export interface ExportResponse {
   error?: string;
 }
 
+export interface VideoToShortsOptions {
+  targetClipCount?: number;
+  minimumDuration?: number;
+}
+
 export const klapService = {
   async createVideoToShortsTask(
     sourceVideoUrl: string,
+    options?: VideoToShortsOptions,
     taskId?: string,
   ): Promise<VideoToShortsResponse> {
+    const body: any = {
+      source_video_url: sourceVideoUrl,
+      language: "en",
+      max_duration: 180,
+      editing_options: {
+        intro_title: false,
+      },
+    };
+
+    // Add target_clip_count if provided (API parameter name)
+    if (options?.targetClipCount) {
+      body.target_clip_count = options.targetClipCount;
+    }
+
+    // Add min_duration if provided (API parameter name)
+    if (options?.minimumDuration) {
+      body.min_duration = options.minimumDuration;
+    }
+
     return klapRequest<VideoToShortsResponse>({
       method: "POST",
       endpoint: "/tasks/video-to-shorts",
-      body: {
-        source_video_url: sourceVideoUrl,
-        language: "en",
-        max_duration: 30,
-        max_clip_count: 5,
-        editing_options: {
-          intro_title: false,
-        },
-      },
+      body,
       taskId,
     });
   },

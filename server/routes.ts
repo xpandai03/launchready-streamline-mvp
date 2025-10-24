@@ -154,7 +154,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { url, email, targetClipCount, minimumDuration } = processVideoAdvancedSchema.parse(req.body);
 
-      // TODO: Use targetClipCount and minimumDuration parameters when Klap API supports them
       console.log('Process video advanced called with:', {
         url,
         email,
@@ -162,8 +161,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         minimumDuration
       });
 
-      // Step 1: Create task via Klap API
-      const klapTask = await klapService.createVideoToShortsTask(url);
+      // Step 1: Create task via Klap API with custom parameters
+      const klapTask = await klapService.createVideoToShortsTask(url, {
+        targetClipCount,
+        minimumDuration,
+      });
 
       // Step 2: Save task in database
       const task = await storage.createTask({
