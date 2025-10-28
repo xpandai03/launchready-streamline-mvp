@@ -70,6 +70,26 @@ Implement Late.dev API integration for posting generated video clips to Instagra
 2. `server/routes.ts` - Added webhook handler + updated social posting logic
 3. `docs/phase5-webhook-setup.md` - Complete setup guide and troubleshooting
 
+**Debugging Session (4:30 PM PST):**
+
+**Issue 1: "createProfile is not a function" ❌**
+- Root Cause: server/services/late.ts was edited locally but never committed/pushed to Git
+- Render was building from GitHub source without the createProfile method
+- Fix: Committed and pushed late.ts (commit b92a813)
+- Result: ✅ Logs now show "createProfile type: function"
+
+**Issue 2: "Profile name is required" ✅**
+- Late.dev API requires `name` field in addition to email
+- Previous implementation only sent `{ email }`
+- API Error: 400 Bad Request - "Profile name is required"
+- Fix Applied:
+  1. Updated `createProfile(email, name)` to accept name parameter
+  2. Modified webhook to extract `full_name` from event.record
+  3. Added fallback: `const name = full_name || email.split('@')[0]`
+  4. Pass name to Late.dev API: `{ email, name }`
+- Committed: 8c371ea
+- Status: ✅ Deployed to production, awaiting test signup
+
 **Next Manual Step:**
 Configure Supabase Database Webhook (see docs/phase5-webhook-setup.md):
 - Navigate to Database → Webhooks in Supabase Dashboard
