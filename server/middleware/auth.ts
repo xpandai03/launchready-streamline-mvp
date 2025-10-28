@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabaseAdmin } from '../services/supabaseAuth';
+import { storage } from '../storage';
 
 /**
  * Extend Express Request type to include userId
@@ -64,6 +65,23 @@ export async function requireAuth(
         message: 'Invalid or expired token. Please log in again.',
       });
       return;
+    }
+
+    // Ensure user exists in database (auto-create if first time)
+    try {
+      const existingUser = await storage.getUser(user.id);
+
+      if (!existingUser) {
+        console.log(`Creating new user in database: ${user.id} (${user.email})`);
+        await storage.createUser({
+          id: user.id,
+          email: user.email || 'unknown@example.com',
+          fullName: user.user_metadata?.full_name || null,
+        });
+      }
+    } catch (dbError) {
+      console.error('Failed to ensure user in database:', dbError);
+      // Continue anyway - user is authenticated, database issue shouldn't block request
     }
 
     // Attach user ID to request for downstream handlers

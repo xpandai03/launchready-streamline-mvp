@@ -1,19 +1,27 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, jsonb, uuid } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Users table - default admin user with id 1
+// Users table - synced with Supabase auth.users
 export const users = pgTable("users", {
-  id: integer("id").primaryKey(),
-  username: text("username").notNull().unique(),
+  id: uuid("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  fullName: text("full_name"),
+  lateProfileId: text("late_profile_id"),
+  lateAccountId: text("late_account_id"),
+  stripeCustomerId: text("stripe_customer_id"),
+  subscriptionStatus: text("subscription_status").default("free"),
+  subscriptionEndsAt: timestamp("subscription_ends_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
 // Tasks table - stores Klap video-to-shorts task data
 export const tasks = pgTable("tasks", {
   id: text("id").primaryKey(), // Klap task ID
-  userId: integer("user_id").notNull().references(() => users.id),
+  userId: uuid("user_id").notNull().references(() => users.id),
   sourceVideoUrl: text("source_video_url").notNull(),
   email: text("email"), // Email for completion notifications
   status: text("status").notNull(), // processing, ready, error
@@ -32,6 +40,7 @@ export const tasks = pgTable("tasks", {
 export const folders = pgTable("folders", {
   id: text("id").primaryKey(), // Klap folder ID
   taskId: text("task_id").notNull().references(() => tasks.id),
+  userId: uuid("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
@@ -40,6 +49,7 @@ export const projects = pgTable("projects", {
   id: text("id").primaryKey(), // Klap project ID
   folderId: text("folder_id").notNull().references(() => folders.id),
   taskId: text("task_id").notNull().references(() => tasks.id),
+  userId: uuid("user_id").notNull().references(() => users.id),
   name: text("name").notNull(),
   viralityScore: integer("virality_score"),
   previewUrl: text("preview_url"),
@@ -53,6 +63,7 @@ export const exports = pgTable("exports", {
   projectId: text("project_id").notNull().references(() => projects.id),
   folderId: text("folder_id").notNull(),
   taskId: text("task_id").notNull().references(() => tasks.id), // Link to task for easier querying
+  userId: uuid("user_id").notNull().references(() => users.id),
   status: text("status").notNull(), // processing, ready, error
   srcUrl: text("src_url"), // Download URL when ready
   errorMessage: text("error_message"),
@@ -66,6 +77,7 @@ export const exports = pgTable("exports", {
 export const apiLogs = pgTable("api_logs", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   taskId: text("task_id"), // Link to task if applicable
+  userId: uuid("user_id").references(() => users.id), // Optional - for admin tracking
   endpoint: text("endpoint").notNull(),
   method: text("method").notNull(),
   requestBody: jsonb("request_body"),
@@ -80,6 +92,7 @@ export const socialPosts = pgTable("social_posts", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   projectId: text("project_id").notNull().references(() => projects.id),
   taskId: text("task_id").notNull().references(() => tasks.id),
+  userId: uuid("user_id").notNull().references(() => users.id),
   platform: text("platform").notNull(), // instagram, tiktok, youtube, etc.
   latePostId: text("late_post_id"), // Late.dev post ID
   platformPostUrl: text("platform_post_url"), // Public URL on social platform
