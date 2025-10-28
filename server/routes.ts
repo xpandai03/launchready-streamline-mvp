@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { klapService } from "./services/klap";
 import { lateService } from "./services/late";
 import { postToSocialSchema } from "./validators/social";
+import { supabaseAdmin } from "./services/supabaseAuth";
 import { z } from "zod";
 
 const DEFAULT_USER_ID = 1; // Admin user
@@ -44,6 +45,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       next();
     } catch (error) {
       next(error);
+    }
+  });
+
+  // GET /api/auth/health - Health check for Supabase authentication configuration
+  app.get("/api/auth/health", async (req, res) => {
+    try {
+      // Check server-side Supabase configuration
+      const serverEnvCheck = {
+        SUPABASE_URL: !!process.env.SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      };
+
+      // Check if Supabase client can connect
+      let serverClientConnected = false;
+      try {
+        const { data, error } = await supabaseAdmin.from('users').select('count');
+        serverClientConnected = !error;
+      } catch (e) {
+        serverClientConnected = false;
+      }
+
+      // Client env vars are set at build time (VITE_ prefix)
+      // We can only verify they're present in the compiled bundle
+      const clientEnvCheck = {
+        note: "Client env vars (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) are set at build time",
+        buildTimeVarsRequired: true
+      };
+
+      res.json({
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        server: {
+          environmentVariables: serverEnvCheck,
+          clientConnected: serverClientConnected,
+          allConfigured: serverEnvCheck.SUPABASE_URL && serverEnvCheck.SUPABASE_SERVICE_ROLE_KEY && serverClientConnected
+        },
+        client: clientEnvCheck,
+        message: serverEnvCheck.SUPABASE_URL && serverEnvCheck.SUPABASE_SERVICE_ROLE_KEY && serverClientConnected
+          ? "Supabase auth is fully configured and connected"
+          : "Supabase auth configuration incomplete - check environment variables"
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        status: "error",
+        error: error.message,
+        message: "Failed to check Supabase auth health"
+      });
     }
   });
 
