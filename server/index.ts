@@ -37,6 +37,22 @@ app.use((req, res, next) => {
   next();
 });
 
+// Simple health check that doesn't depend on other imports
+app.get("/api/auth/health", (req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    env: {
+      NODE_ENV: process.env.NODE_ENV || "unknown",
+      SUPABASE_URL: !!process.env.SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      VITE_SUPABASE_URL: !!process.env.VITE_SUPABASE_URL,
+      VITE_SUPABASE_ANON_KEY: !!process.env.VITE_SUPABASE_ANON_KEY,
+    },
+    message: "Health check endpoint active"
+  });
+});
+
 (async () => {
   const server = await registerRoutes(app);
 
