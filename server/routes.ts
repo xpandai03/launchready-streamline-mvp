@@ -87,7 +87,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Handle user.created event
       if (event.type === 'INSERT' && event.table === 'users') {
-        const { id: userId, email } = event.record;
+        const { id: userId, email, full_name } = event.record;
 
         // Validate required fields
         if (!userId || !email) {
@@ -95,7 +95,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ error: 'Missing userId or email' });
         }
 
-        console.log('[Auth Webhook] New user created:', { userId, email });
+        // Derive name from full_name or email
+        const name = full_name || email.split('@')[0];
+
+        console.log('[Auth Webhook] New user created:', { userId, email, name });
 
         // Debug: Check if lateService and createProfile exist
         console.log('[Auth Webhook] lateService type:', typeof lateService);
@@ -115,7 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Create Late.dev profile for the new user
         try {
-          const { profileId } = await lateService.createProfile(email);
+          const { profileId } = await lateService.createProfile(email, name);
 
           console.log('[Auth Webhook] Late.dev profile created:', profileId);
 

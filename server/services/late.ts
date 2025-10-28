@@ -70,15 +70,16 @@ export const lateService = {
    * Create a new Late.dev profile for a user
    *
    * @param email - User's email address
+   * @param name - User's display name
    * @returns Profile ID and creation details
    * @throws Error if profile creation fails
    */
-  async createProfile(email: string): Promise<CreateProfileResponse> {
+  async createProfile(email: string, name: string): Promise<CreateProfileResponse> {
     if (!LATE_API_KEY) {
       throw new Error('LATE_API_KEY is not configured. Please add it to your .env file.');
     }
 
-    console.log('[Late Service] Creating profile for:', email);
+    console.log('[Late Service] Creating profile for:', { email, name });
 
     try {
       const response = await fetch(`${LATE_BASE_URL}/profiles`, {
@@ -87,7 +88,7 @@ export const lateService = {
           'Authorization': `Bearer ${LATE_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, name }),
       });
 
       const data = await response.json();
