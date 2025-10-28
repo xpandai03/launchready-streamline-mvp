@@ -89,7 +89,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (event.type === 'INSERT' && event.table === 'users') {
         const { id: userId, email } = event.record;
 
+        // Validate required fields
+        if (!userId || !email) {
+          console.error('[Auth Webhook] Missing required fields:', { userId, email });
+          return res.status(400).json({ error: 'Missing userId or email' });
+        }
+
         console.log('[Auth Webhook] New user created:', { userId, email });
+
+        // Debug: Check if lateService and createProfile exist
+        console.log('[Auth Webhook] lateService type:', typeof lateService);
+        console.log('[Auth Webhook] createProfile type:', typeof lateService?.createProfile);
+
+        // Check if profile already exists (idempotency)
+        const { data: existingUser } = await supabaseAdmin
+          .from('users')
+          .select('late_profile_id')
+          .eq('id', userId)
+          .single();
+
+        if (existingUser?.late_profile_id) {
+          console.log('[Auth Webhook] Profile already exists:', existingUser.late_profile_id);
+          return res.json({ received: true, message: 'Profile already exists' });
+        }
 
         // Create Late.dev profile for the new user
         try {

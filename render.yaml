@@ -3,7 +3,7 @@ services:
     name: streamline-mvp
     env: node
     region: oregon
-    buildCommand: npm install && npm run build
+    buildCommand: rm -rf dist && npm install && npm run build
     startCommand: npm run start
     envVars:
       - key: NODE_ENV
