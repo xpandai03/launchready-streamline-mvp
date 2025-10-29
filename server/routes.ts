@@ -502,14 +502,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('[OAuth] Redirect URL:', { origin, frontendUrl, redirectUrl });
 
-      // Generate Late.dev OAuth URL
-      const connectUrl = lateService.generateConnectUrl(
+      // Generate Late.dev OAuth URL (server-side authenticated request)
+      const connectUrl = await lateService.generateConnectUrl(
         user.lateProfileId,
         platform.toLowerCase(),
         redirectUrl
       );
 
-      console.log('[OAuth] Connect URL generated:', { userId, platform, profileId: user.lateProfileId });
+      console.log('[OAuth] OAuth URL generated successfully:', { userId, platform, profileId: user.lateProfileId });
 
       res.json({
         success: true,

@@ -363,27 +363,81 @@ export const lateService = {
   /**
    * Generate OAuth connect URL for a platform
    *
+   * This method makes an authenticated server-side request to Late.dev's connect endpoint,
+   * which returns a 302 redirect to the actual OAuth authorization page.
+   * We extract and return that OAuth URL for the browser to open.
+   *
    * @param profileId - Late.dev profile ID to connect the account to
    * @param platform - Platform to connect (instagram, tiktok, youtube, etc.)
    * @param redirectUrl - Custom redirect URL after OAuth completion
-   * @returns OAuth URL that the user should visit
+   * @returns OAuth URL that the user should visit (e.g., https://auth.late.dev/oauth/instagram)
    */
-  generateConnectUrl(profileId: string, platform: string, redirectUrl: string): string {
+  async generateConnectUrl(profileId: string, platform: string, redirectUrl: string): Promise<string> {
     if (!LATE_API_KEY) {
       throw new Error('LATE_API_KEY is not configured');
     }
 
-    // Construct the Late.dev OAuth URL
-    const connectUrl = `${LATE_BASE_URL}/connect/${platform}?profileId=${profileId}&redirect_url=${encodeURIComponent(redirectUrl)}`;
+    // Construct the Late.dev connect endpoint URL (requires authentication)
+    const connectEndpoint = `${LATE_BASE_URL}/connect/${platform}?profileId=${profileId}&redirect_url=${encodeURIComponent(redirectUrl)}`;
 
-    console.log('[Late Service] Generated connect URL:', {
+    console.log('[Late Service] Requesting OAuth URL from Late.dev:', {
       profileId,
       platform,
       redirectUrl,
-      connectUrl: connectUrl.substring(0, 100) + '...',
+      endpoint: connectEndpoint.substring(0, 100) + '...',
     });
 
-    return connectUrl;
+    try {
+      // Make authenticated request with redirect: 'manual' to capture the 302 Location header
+      const response = await fetch(connectEndpoint, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${LATE_API_KEY}`,
+        },
+        redirect: 'manual', // Don't auto-follow redirects - we need the Location header
+      });
+
+      // Late.dev returns 302 with Location header pointing to OAuth page
+      if (response.status === 302 || response.status === 301) {
+        const oauthUrl = response.headers.get('location');
+
+        if (!oauthUrl) {
+          console.error('[Late Service] Missing Location header in redirect response:', {
+            status: response.status,
+            headers: Object.fromEntries(response.headers.entries()),
+          });
+          throw new Error('Late.dev redirect missing Location header');
+        }
+
+        console.log('[Late Service] OAuth URL extracted from redirect:', {
+          oauthUrl: oauthUrl.substring(0, 100) + '...',
+          status: response.status,
+        });
+
+        return oauthUrl;
+      }
+
+      // Handle non-redirect responses (errors)
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = errorText;
+      }
+
+      console.error('[Late Service] Unexpected response from connect endpoint:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData,
+        endpoint: connectEndpoint,
+      });
+
+      throw new Error(`Late.dev connect endpoint returned ${response.status}: ${errorText}`);
+    } catch (error) {
+      console.error('[Late Service] Error generating OAuth URL:', error);
+      throw error;
+    }
   },
 
   /**
