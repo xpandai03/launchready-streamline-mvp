@@ -418,15 +418,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log('[OAuth] Profile already exists, fetching existing profile:', user!.email);
 
             try {
-              // Fetch all profiles and find the one matching this user's email
+              // Fetch all profiles and find the one matching this user's email or name
               const profilesData = await lateService.getProfiles();
-              const existingProfile = profilesData.profiles?.find(
+
+              // Try to match by email first
+              let existingProfile = profilesData.profiles?.find(
                 (p: any) => p.email === user!.email
               );
 
+              // If email matching fails (email field might not be returned by API),
+              // try matching by name (which is what Late.dev uses for uniqueness)
+              if (!existingProfile) {
+                const expectedName = user!.fullName || user!.email.split('@')[0];
+                console.log('[OAuth] Email match failed, trying name match:', expectedName);
+
+                existingProfile = profilesData.profiles?.find(
+                  (p: any) => p.name === expectedName
+                );
+              }
+
               if (existingProfile) {
                 const profileId = existingProfile._id;
-                console.log('[OAuth] Found existing profile:', { userId, profileId, email: user!.email });
+                console.log('[OAuth] Found existing profile:', {
+                  userId,
+                  profileId,
+                  matchedBy: existingProfile.email ? 'email' : 'name',
+                  profileEmail: existingProfile.email,
+                  profileName: existingProfile.name
+                });
 
                 // Store the existing profile ID
                 await storage.updateUser(userId, { lateProfileId: profileId });
@@ -436,11 +455,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
                 console.log('[OAuth] Linked existing Late profile to user');
               } else {
-                console.error('[OAuth] Profile exists but could not find it by email:', user!.email);
+                console.error('[OAuth] Profile exists but could not find it:', {
+                  email: user!.email,
+                  name: user!.fullName || user!.email.split('@')[0],
+                  availableProfiles: profilesData.profiles?.length || 0
+                });
                 return res.status(500).json({
                   error: 'Profile reconciliation failed',
                   message: 'Your social media profile exists but we could not link it. Please contact support.',
-                  details: 'Profile found in Late.dev but email mismatch',
+                  details: 'Profile found in Late.dev but could not match by email or name',
                 });
               }
             } catch (fetchError: any) {

@@ -288,9 +288,17 @@ export const lateService = {
       }
 
       const data = await response.json();
+
+      // Log full profile structure to debug what fields are available
       console.log('[Late Service] Profiles fetched:', {
         count: data.profiles?.length || 0,
-        profiles: data.profiles?.map((p: any) => ({ id: p._id, email: p.email })),
+        profiles: data.profiles?.map((p: any) => ({
+          id: p._id,
+          email: p.email,
+          name: p.name,
+          // Log all keys to see what's actually returned
+          allKeys: Object.keys(p)
+        })),
       });
 
       return data;
