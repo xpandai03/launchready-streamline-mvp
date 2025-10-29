@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { User, LogOut, Video } from 'lucide-react';
+import { User, LogOut, Video, Settings } from 'lucide-react';
 
 export function Header() {
   const { user, signOut } = useAuth();
@@ -71,6 +71,14 @@ export function Header() {
                       <a className="flex w-full items-center">
                         <Video className="mr-2 h-4 w-4" />
                         Videos
+                      </a>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings/social-accounts">
+                      <a className="flex w-full items-center">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Settings
                       </a>
                     </Link>
                   </DropdownMenuItem>

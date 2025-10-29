@@ -11,6 +11,8 @@ import VideoListPage from "@/pages/VideoListPage";
 import VideoDetailPage from "@/pages/VideoDetailPage";
 import LoginPage from "@/pages/auth/LoginPage";
 import SignupPage from "@/pages/auth/SignupPage";
+import SocialAccountsPage from "@/pages/settings/SocialAccountsPage";
+import OAuthCallbackPage from "@/pages/OAuthCallbackPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -21,6 +23,9 @@ function Router() {
         {/* Auth routes - public */}
         <Route path="/auth/login" component={LoginPage} />
         <Route path="/auth/signup" component={SignupPage} />
+
+        {/* OAuth callback - public */}
+        <Route path="/oauth-callback" component={OAuthCallbackPage} />
 
         {/* Protected routes - require authentication */}
         <Route path="/">
@@ -36,6 +41,11 @@ function Router() {
         <Route path="/details/:id">
           <ProtectedRoute>
             <VideoDetailPage />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/settings/social-accounts">
+          <ProtectedRoute>
+            <SocialAccountsPage />
           </ProtectedRoute>
         </Route>
 
