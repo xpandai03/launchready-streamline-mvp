@@ -8,7 +8,7 @@
  * Phase 6: Usage Limits & Tracking
  */
 
-import { db } from "../../db";
+import { db } from "../db";
 import { userUsage, users } from "../../shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 
