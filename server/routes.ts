@@ -6,6 +6,7 @@ import { lateService } from "./services/late";
 import { postToSocialSchema } from "./validators/social";
 import { supabaseAdmin } from "./services/supabaseAuth";
 import { requireAuth } from "./middleware/auth";
+import { checkVideoLimit, checkPostLimit, incrementVideoUsage, incrementPostUsage, getCurrentUsage, FREE_VIDEO_LIMIT, FREE_POST_LIMIT } from "./services/usageLimits";
 import { z } from "zod";
 
 // Validation schemas
@@ -154,6 +155,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { sourceVideoUrl, autoExport } = createVideoSchema.parse(req.body);
 
+      // Check usage limit (Phase 6: Free tier limits)
+      const canCreateVideo = await checkVideoLimit(req.userId!);
+      if (!canCreateVideo) {
+        console.log('[Usage Limits] Video limit reached for user:', req.userId);
+        return res.status(403).json({
+          error: 'Monthly video limit reached',
+          message: 'Free plan allows 3 videos per month. Upgrade to Pro for unlimited videos.',
+          limit: FREE_VIDEO_LIMIT,
+        });
+      }
+
       // Create initial task record
       const klapResponse =
         await klapService.createVideoToShortsTask(sourceVideoUrl);
@@ -169,6 +181,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         autoExportRequested: autoExport ? "true" : "false",
         autoExportStatus: autoExport ? "pending" : null,
       });
+
+      // Increment usage counter (Phase 6: Track video creation)
+      await incrementVideoUsage(req.userId!);
 
       // Start background processing
       processVideoTask(task.id).catch(console.error);
@@ -307,6 +322,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res
         .status(500)
         .json({ error: error.message || "Failed to fetch videos" });
+    }
+  });
+
+  // GET /api/usage - Get current usage stats for the user (Phase 6: Usage tracking)
+  app.get("/api/usage", async (req, res) => {
+    try {
+      const usage = await getCurrentUsage(req.userId!);
+
+      console.log('[Usage API] Fetched usage for user:', req.userId, usage);
+
+      res.json(usage);
+    } catch (error: any) {
+      console.error("[Usage API] Error fetching usage:", error);
+      res.status(500).json({ error: error.message });
     }
   });
 
@@ -508,6 +537,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { projectId, platform, caption } = validation.data;
 
+      // Check usage limit (Phase 6: Free tier limits)
+      const canCreatePost = await checkPostLimit(req.userId!);
+      if (!canCreatePost) {
+        console.log('[Usage Limits] Post limit reached for user:', req.userId);
+        return res.status(403).json({
+          error: 'Monthly post limit reached',
+          message: 'Free plan allows 3 social posts per month. Upgrade to Pro for unlimited posting.',
+          limit: FREE_POST_LIMIT,
+        });
+      }
+
       console.log(`[Social Post] Request to post project ${projectId} to ${platform}`);
 
       // Get project to verify it exists and get associated task
@@ -608,6 +648,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         console.log(`[Social Post] Successfully posted to Instagram: ${instagramPost?.platformPostUrl || 'pending'}`);
+
+        // Increment usage counter (Phase 6: Track social post creation)
+        await incrementPostUsage(req.userId!);
 
         res.json({
           success: true,

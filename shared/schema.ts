@@ -104,6 +104,18 @@ export const socialPosts = pgTable("social_posts", {
   publishedAt: timestamp("published_at"),
 });
 
+// User Usage table - tracks monthly usage for free tier limits
+export const userUsage = pgTable("user_usage", {
+  userId: uuid("user_id").notNull().references(() => users.id),
+  month: text("month").notNull(), // Format: YYYY-MM
+  videosCreated: integer("videos_created").notNull().default(0),
+  postsCreated: integer("posts_created").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (table) => ({
+  pk: { name: "user_usage_pkey", columns: [table.userId, table.month] },
+}));
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   tasks: many(tasks),
@@ -195,6 +207,14 @@ export const insertSocialPostSchema = createInsertSchema(socialPosts, {
   createdAt: true,
 });
 
+export const insertUserUsageSchema = createInsertSchema(userUsage, {
+  createdAt: () => z.date().optional(),
+  updatedAt: () => z.date().optional(),
+}).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -216,3 +236,6 @@ export type InsertApiLog = z.infer<typeof insertApiLogSchema>;
 
 export type SocialPost = typeof socialPosts.$inferSelect;
 export type InsertSocialPost = z.infer<typeof insertSocialPostSchema>;
+
+export type UserUsage = typeof userUsage.$inferSelect;
+export type InsertUserUsage = z.infer<typeof insertUserUsageSchema>;
