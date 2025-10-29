@@ -10,8 +10,16 @@ async function throwIfResNotOk(res: Response) {
 
 /**
  * Get authorization headers with JWT token from Supabase session
+ *
+ * This helper extracts the access token from the current Supabase session
+ * and returns it in the correct format for API Authorization headers.
+ *
+ * @returns Headers object with Authorization bearer token
+ * @example
+ * const headers = await getAuthHeaders();
+ * fetch('/api/endpoint', { headers });
  */
-async function getAuthHeaders(): Promise<Record<string, string>> {
+export async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();
   const headers: Record<string, string> = {};
 

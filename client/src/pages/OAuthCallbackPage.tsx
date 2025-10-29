@@ -3,6 +3,7 @@ import { useLocation } from 'wouter';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { getAuthHeaders } from '@/lib/queryClient';
 
 export default function OAuthCallbackPage() {
   const [, setLocation] = useLocation();
@@ -39,11 +40,12 @@ export default function OAuthCallbackPage() {
       }
 
       // Send callback data to backend
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/social/callback', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          ...authHeaders,
         },
         body: JSON.stringify({
           connected,

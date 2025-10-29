@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle, ExternalLink, Instagram, Youtube } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { getAuthHeaders } from '@/lib/queryClient';
 
 // Platform icons mapping
 const platformIcons: Record<string, any> = {
@@ -94,10 +95,9 @@ export default function SocialAccountsPage() {
 
   const fetchConnectedAccounts = async () => {
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/social/accounts', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers: authHeaders,
       });
 
       if (!response.ok) {
@@ -134,10 +134,9 @@ export default function SocialAccountsPage() {
     setConnectingPlatform(platform);
 
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch(`/api/social/connect/${platform}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers: authHeaders,
       });
 
       if (!response.ok) {
