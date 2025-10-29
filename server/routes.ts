@@ -413,12 +413,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           console.log('[OAuth] Late profile created:', { userId, profileId });
         } catch (profileError: any) {
-          console.error('[OAuth] Failed to create Late profile:', profileError);
-          return res.status(500).json({
-            error: 'Failed to create profile',
-            message: 'Unable to create your social media profile. Please try again.',
-            details: profileError.message,
-          });
+          // Handle "profile already exists" error - fetch existing profile
+          if (profileError.message && profileError.message.includes('already exists')) {
+            console.log('[OAuth] Profile already exists, fetching existing profile:', user!.email);
+
+            try {
+              // Fetch all profiles and find the one matching this user's email
+              const profilesData = await lateService.getProfiles();
+              const existingProfile = profilesData.profiles?.find(
+                (p: any) => p.email === user!.email
+              );
+
+              if (existingProfile) {
+                const profileId = existingProfile._id;
+                console.log('[OAuth] Found existing profile:', { userId, profileId, email: user!.email });
+
+                // Store the existing profile ID
+                await storage.updateUser(userId, { lateProfileId: profileId });
+
+                // Reload user
+                user = await storage.getUser(userId);
+
+                console.log('[OAuth] Linked existing Late profile to user');
+              } else {
+                console.error('[OAuth] Profile exists but could not find it by email:', user!.email);
+                return res.status(500).json({
+                  error: 'Profile reconciliation failed',
+                  message: 'Your social media profile exists but we could not link it. Please contact support.',
+                  details: 'Profile found in Late.dev but email mismatch',
+                });
+              }
+            } catch (fetchError: any) {
+              console.error('[OAuth] Failed to fetch existing profiles:', fetchError);
+              return res.status(500).json({
+                error: 'Profile lookup failed',
+                message: 'Unable to find your existing profile. Please contact support.',
+                details: fetchError.message,
+              });
+            }
+          } else {
+            // Other profile creation errors
+            console.error('[OAuth] Failed to create Late profile:', profileError);
+            return res.status(500).json({
+              error: 'Failed to create profile',
+              message: 'Unable to create your social media profile. Please try again.',
+              details: profileError.message,
+            });
+          }
         }
       }
 

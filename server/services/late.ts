@@ -262,6 +262,45 @@ export const lateService = {
   },
 
   /**
+   * Get all profiles from Late.dev
+   *
+   * @returns List of all profiles under this API key
+   */
+  async getProfiles(): Promise<any> {
+    if (!LATE_API_KEY) {
+      throw new Error('LATE_API_KEY is not configured');
+    }
+
+    console.log('[Late Service] Fetching all profiles');
+
+    try {
+      const response = await fetch(`${LATE_BASE_URL}/profiles`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${LATE_API_KEY}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('[Late Service] Failed to fetch profiles:', error);
+        throw new Error(`Failed to fetch profiles: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[Late Service] Profiles fetched:', {
+        count: data.profiles?.length || 0,
+        profiles: data.profiles?.map((p: any) => ({ id: p._id, email: p.email })),
+      });
+
+      return data;
+    } catch (error) {
+      console.error('[Late Service] Error fetching profiles:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Get connected accounts from Late.dev
    *
    * Useful for debugging and verifying account connections
