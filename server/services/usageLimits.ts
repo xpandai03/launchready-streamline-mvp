@@ -130,7 +130,7 @@ export async function checkPostLimit(userId: string): Promise<boolean> {
 export async function incrementVideoUsage(userId: string): Promise<void> {
   const month = getCurrentMonth();
 
-  console.log('[Usage Limits] Incrementing video usage:', { userId, month });
+  console.log('[Usage Limits] UPSERT user_usage (video):', { userId, month });
 
   try {
     const result = await db
@@ -144,14 +144,16 @@ export async function incrementVideoUsage(userId: string): Promise<void> {
       .onConflictDoUpdate({
         target: [userUsage.userId, userUsage.month],
         set: {
-          videosCreated: sql`videos_created + 1`,
+          // Fully qualify column name to avoid ambiguity with EXCLUDED pseudo-table
+          videosCreated: sql`COALESCE("user_usage"."videos_created", 0) + 1`,
           updatedAt: new Date(),
         },
       });
 
-    console.log('[Usage Limits] Video usage incremented successfully for:', { userId, month });
+    console.log('[Usage Limits] Increment OK (video):', { userId, month });
   } catch (error) {
     console.error('[Usage Limits] ERROR incrementing video usage:', error);
+    console.error('[Usage Limits] Full error details:', JSON.stringify(error, null, 2));
     throw error;
   }
 }
@@ -163,7 +165,7 @@ export async function incrementVideoUsage(userId: string): Promise<void> {
 export async function incrementPostUsage(userId: string): Promise<void> {
   const month = getCurrentMonth();
 
-  console.log('[Usage Limits] Incrementing post usage:', { userId, month });
+  console.log('[Usage Limits] UPSERT user_usage (post):', { userId, month });
 
   try {
     const result = await db
@@ -177,14 +179,16 @@ export async function incrementPostUsage(userId: string): Promise<void> {
       .onConflictDoUpdate({
         target: [userUsage.userId, userUsage.month],
         set: {
-          postsCreated: sql`posts_created + 1`,
+          // Fully qualify column name to avoid ambiguity with EXCLUDED pseudo-table
+          postsCreated: sql`COALESCE("user_usage"."posts_created", 0) + 1`,
           updatedAt: new Date(),
         },
       });
 
-    console.log('[Usage Limits] Post usage incremented successfully for:', { userId, month });
+    console.log('[Usage Limits] Increment OK (post):', { userId, month });
   } catch (error) {
     console.error('[Usage Limits] ERROR incrementing post usage:', error);
+    console.error('[Usage Limits] Full error details:', JSON.stringify(error, null, 2));
     throw error;
   }
 }
