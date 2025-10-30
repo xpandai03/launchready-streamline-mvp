@@ -1,13 +1,19 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import express from "express";
 import { storage } from "./storage";
 import { klapService } from "./services/klap";
 import { lateService } from "./services/late";
+import { stripeService } from "./services/stripe";
 import { postToSocialSchema } from "./validators/social";
 import { supabaseAdmin } from "./services/supabaseAuth";
 import { requireAuth } from "./middleware/auth";
 import { checkVideoLimit, checkPostLimit, incrementVideoUsage, incrementPostUsage, getCurrentUsage, FREE_VIDEO_LIMIT, FREE_POST_LIMIT } from "./services/usageLimits";
+import { db } from "./db";
+import { stripeEvents } from "../shared/schema";
+import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import type Stripe from "stripe";
 
 // Validation schemas
 const createVideoSchema = z.object({
@@ -283,8 +289,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/user - Get current user data including subscription status
+  app.get("/api/user", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Return user data needed for billing UI
+      res.json({
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        subscriptionStatus: user.subscriptionStatus || 'free',
+        stripeCustomerId: user.stripeCustomerId,
+        subscriptionEndsAt: user.subscriptionEndsAt,
+        createdAt: user.createdAt,
+      });
+    } catch (error: any) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch user data" });
+    }
+  });
+
   // POST /api/process-video-advanced - Process video with custom parameters
-  app.post("/api/process-video-advanced", async (req, res) => {
+  app.post("/api/process-video-advanced", requireAuth, async (req, res) => {
     try {
       const { url, email, targetClipCount, minimumDuration } = processVideoAdvancedSchema.parse(req.body);
 
@@ -1078,8 +1110,311 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ========================================
+  // STRIPE SUBSCRIPTION BILLING ENDPOINTS
+  // ========================================
+
+  // POST /api/stripe/create-checkout-session - Create Stripe checkout session for Pro upgrade
+  app.post('/api/stripe/create-checkout-session', requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId;
+      if (!userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      console.log('[Stripe Checkout] Creating session for user:', userId);
+
+      // Get user from database
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Check if user already has Pro subscription
+      if (user.subscriptionStatus === 'pro') {
+        console.log('[Stripe Checkout] User already has Pro subscription:', userId);
+        return res.status(400).json({
+          error: 'You already have an active Pro subscription',
+        });
+      }
+
+      // Detect frontend URL for success/cancel redirects
+      const origin = req.headers.origin || req.headers.referer?.split('/').slice(0, 3).join('/');
+      const frontendUrl = process.env.FRONTEND_URL || origin || 'http://localhost:5000';
+
+      const successUrl = `${frontendUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${frontendUrl}/billing/cancel`;
+
+      // Create Stripe Checkout Session
+      const { sessionId, url } = await stripeService.createCheckoutSession({
+        userId,
+        userEmail: user.email,
+        successUrl,
+        cancelUrl,
+      });
+
+      console.log('[Stripe Checkout] Session created:', {
+        userId,
+        sessionId,
+        redirectUrl: url.substring(0, 50) + '...',
+      });
+
+      res.json({
+        success: true,
+        sessionId,
+        url,
+      });
+    } catch (error: any) {
+      console.error('[Stripe Checkout] Error:', error);
+      res.status(500).json({
+        error: error.message || 'Failed to create checkout session',
+      });
+    }
+  });
+
+  // POST /api/stripe/webhook - Handle Stripe webhook events (PUBLIC endpoint)
+  // IMPORTANT: Uses raw body for signature verification
+  app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    const signature = req.headers['stripe-signature'];
+
+    if (!signature) {
+      console.error('[Stripe Webhook] Missing stripe-signature header');
+      return res.status(400).json({ error: 'Missing stripe-signature header' });
+    }
+
+    try {
+      // Verify webhook signature
+      const event = stripeService.verifyWebhookSignature(req.body, signature as string);
+
+      console.log('[Stripe Webhook] Received event:', {
+        eventId: event.id,
+        eventType: event.type,
+        created: new Date(event.created * 1000).toISOString(),
+      });
+
+      // Check idempotency - have we already processed this event?
+      const existingEvent = await db
+        .select()
+        .from(stripeEvents)
+        .where(eq(stripeEvents.eventId, event.id))
+        .limit(1);
+
+      if (existingEvent.length > 0) {
+        console.log('[Stripe Webhook] Event already processed:', event.id);
+        return res.json({ received: true, status: 'already_processed' });
+      }
+
+      // Handle different event types
+      switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object as Stripe.Checkout.Session;
+          await handleCheckoutCompleted(session);
+          break;
+        }
+
+        case 'customer.subscription.updated': {
+          const subscription = event.data.object as Stripe.Subscription;
+          await handleSubscriptionUpdated(subscription);
+          break;
+        }
+
+        case 'customer.subscription.deleted': {
+          const subscription = event.data.object as Stripe.Subscription;
+          await handleSubscriptionDeleted(subscription);
+          break;
+        }
+
+        case 'invoice.payment_failed': {
+          const invoice = event.data.object as Stripe.Invoice;
+          await handlePaymentFailed(invoice);
+          break;
+        }
+
+        default:
+          console.log('[Stripe Webhook] Unhandled event type:', event.type);
+      }
+
+      // Mark event as processed (idempotency)
+      await db.insert(stripeEvents).values({
+        eventId: event.id,
+        eventType: event.type,
+        processedAt: new Date(),
+      });
+
+      console.log('[Stripe Webhook] Event processed successfully:', event.id);
+      res.json({ received: true });
+    } catch (error: any) {
+      console.error('[Stripe Webhook] Error:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // POST /api/stripe/create-portal-session - Create Stripe Customer Portal session
+  app.post('/api/stripe/create-portal-session', requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId;
+      if (!userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      if (!user.stripeCustomerId) {
+        return res.status(400).json({
+          error: 'No Stripe customer found. Please subscribe first.',
+        });
+      }
+
+      // Detect frontend URL for return URL
+      const origin = req.headers.origin || req.headers.referer?.split('/').slice(0, 3).join('/');
+      const frontendUrl = process.env.FRONTEND_URL || origin || 'http://localhost:5000';
+      const returnUrl = `${frontendUrl}/settings/billing`;
+
+      const portalUrl = await stripeService.createPortalSession(
+        user.stripeCustomerId,
+        returnUrl
+      );
+
+      console.log('[Stripe Portal] Session created for user:', userId);
+
+      res.json({
+        success: true,
+        url: portalUrl,
+      });
+    } catch (error: any) {
+      console.error('[Stripe Portal] Error:', error);
+      res.status(500).json({
+        error: error.message || 'Failed to create portal session',
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
+}
+
+// ========================================
+// STRIPE WEBHOOK EVENT HANDLERS
+// ========================================
+
+/**
+ * Handle successful checkout - upgrade user to Pro
+ */
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const userId = session.client_reference_id;
+
+  if (!userId) {
+    console.error('[Stripe Webhook] Missing client_reference_id in checkout session');
+    return;
+  }
+
+  console.log('[Stripe Webhook] Checkout completed:', {
+    userId,
+    customerId: session.customer,
+    subscriptionId: session.subscription,
+  });
+
+  // Update user with Stripe Customer ID and Pro status
+  await storage.updateUser(userId, {
+    stripeCustomerId: session.customer as string,
+    subscriptionStatus: 'pro',
+    subscriptionEndsAt: null, // Active subscription, no end date yet
+  });
+
+  console.log('[Stripe Webhook] User upgraded to Pro:', userId);
+}
+
+/**
+ * Handle subscription updated (renewal, plan change, etc.)
+ */
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+  const userId = subscription.metadata.userId;
+
+  if (!userId) {
+    console.error('[Stripe Webhook] Missing userId in subscription metadata');
+    return;
+  }
+
+  console.log('[Stripe Webhook] Subscription updated:', {
+    userId,
+    subscriptionId: subscription.id,
+    status: subscription.status,
+    currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+  });
+
+  // Update subscription status and end date
+  const subscriptionStatus = subscription.status === 'active' ? 'pro' : 'free';
+  const subscriptionEndsAt = new Date(subscription.current_period_end * 1000);
+
+  await storage.updateUser(userId, {
+    subscriptionStatus,
+    subscriptionEndsAt,
+  });
+
+  console.log('[Stripe Webhook] User subscription updated:', {
+    userId,
+    status: subscriptionStatus,
+    endsAt: subscriptionEndsAt.toISOString(),
+  });
+}
+
+/**
+ * Handle subscription deleted (cancellation)
+ */
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  const userId = subscription.metadata.userId;
+
+  if (!userId) {
+    console.error('[Stripe Webhook] Missing userId in subscription metadata');
+    return;
+  }
+
+  console.log('[Stripe Webhook] Subscription deleted:', {
+    userId,
+    subscriptionId: subscription.id,
+  });
+
+  // Downgrade user to free tier
+  await storage.updateUser(userId, {
+    subscriptionStatus: 'free',
+    subscriptionEndsAt: null,
+  });
+
+  console.log('[Stripe Webhook] User downgraded to free:', userId);
+}
+
+/**
+ * Handle failed payment
+ */
+async function handlePaymentFailed(invoice: Stripe.Invoice) {
+  const customerId = invoice.customer as string;
+
+  console.log('[Stripe Webhook] Payment failed:', {
+    customerId,
+    invoiceId: invoice.id,
+    amountDue: invoice.amount_due,
+  });
+
+  // Find user by Stripe Customer ID
+  const allUsers = await db.query.users.findMany();
+  const user = allUsers.find(u => u.stripeCustomerId === customerId);
+
+  if (!user) {
+    console.error('[Stripe Webhook] User not found for customer:', customerId);
+    return;
+  }
+
+  // Mark subscription as past_due (Stripe will retry payment)
+  await storage.updateUser(user.id, {
+    subscriptionStatus: 'past_due',
+  });
+
+  console.log('[Stripe Webhook] User marked as past_due:', user.id);
+
+  // TODO: Send email notification about failed payment
 }
 
 // Background processing functions

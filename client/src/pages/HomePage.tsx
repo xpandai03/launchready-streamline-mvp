@@ -1,20 +1,15 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Video, Sparkles, Zap, TrendingUp, ListVideo } from "lucide-react";
+import { Video, Sparkles, ListVideo } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { LimitReachedDialog } from "@/components/LimitReachedDialog";
+import { WaveBackground } from "@/components/ui/wave-background";
 
 // Slider configuration constants
 const CLIP_COUNT_CONFIG = {
@@ -34,6 +29,7 @@ export default function HomePage() {
   const [email, setEmail] = useState("");
   const [targetClipCount, setTargetClipCount] = useState<number>(CLIP_COUNT_CONFIG.default);
   const [minimumDuration, setMinimumDuration] = useState<number>(DURATION_CONFIG.default);
+  const [showLimitDialog, setShowLimitDialog] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -72,10 +68,17 @@ export default function HomePage() {
       }, 1000);
     },
     onError: (error: any) => {
+      // Check if error is due to usage limits
+      const errorMessage = error.message || "";
+      if (errorMessage.toLowerCase().includes("limit") ||
+          errorMessage.toLowerCase().includes("free tier")) {
+        setShowLimitDialog(true);
+        return;
+      }
+
       toast({
         title: "Error",
-        description:
-          error.message || "Failed to start processing. Please try again.",
+        description: errorMessage || "Failed to start processing. Please try again.",
         variant: "destructive",
       });
     },
@@ -114,69 +117,61 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <div className="w-full max-w-2xl">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
-            <Video className="h-8 w-8 text-primary" />
-          </div>
-          <h1 className="text-3xl font-semibold text-foreground mb-2">
-            YouTube to Shorts Converter
-          </h1>
-          <p className="text-muted-foreground">
-            Transform your long-form videos into viral-ready shorts with
-            AI-powered analysis
-          </p>
-        </div>
+    <div className="min-h-screen w-full bg-black overflow-hidden relative">
+      <WaveBackground />
 
-        <Card data-testid="card-url-input">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Video className="h-5 w-5" />
-              Submit Video URL
-            </CardTitle>
-            <CardDescription>
-              Enter a YouTube or video URL to generate viral-ready short clips
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      {/* Content overlay */}
+      <div className="relative z-50 min-h-screen flex items-center justify-center px-4 pt-32 pb-12">
+        <div className="w-full max-w-2xl mt-8">
+          {/* Form Card with Glass-morphism */}
+          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl" data-testid="card-url-input">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-white flex items-center gap-2 mb-2">
+                <Video className="h-5 w-5 text-blue-400" />
+                Submit Video URL
+              </h2>
+              <p className="text-gray-300/70 text-sm">
+                Enter a YouTube or video URL to generate viral-ready short clips
+              </p>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="video-url">Video URL</Label>
+                <Label htmlFor="video-url" className="text-white">Video URL</Label>
                 <Input
                   id="video-url"
                   type="url"
                   placeholder="https://www.youtube.com/watch?v=..."
                   value={urls}
                   onChange={(e) => setUrls(e.target.value)}
-                  className="text-base font-mono"
+                  className="text-base font-mono bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-blue-500"
                   data-testid="input-video-url"
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-gray-400">
                   Supports YouTube, S3, Google Cloud Storage, and public HTTP/HTTPS URLs
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email (Optional)</Label>
+                <Label htmlFor="email" className="text-white">Email (Optional)</Label>
                 <input
                   id="email"
                   type="email"
                   placeholder="your@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                  className="flex h-9 w-full rounded-md border bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-blue-500 px-3 py-1 text-base shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                   data-testid="input-email"
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-gray-400">
                   We'll notify you when your video is ready
                 </p>
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="clip-count">Target Clip Count</Label>
-                  <span className="text-sm font-medium text-foreground" data-testid="text-clip-count">
+                  <Label htmlFor="clip-count" className="text-white">Target Clip Count</Label>
+                  <span className="text-sm font-medium text-white" data-testid="text-clip-count">
                     {targetClipCount}
                   </span>
                 </div>
@@ -188,16 +183,17 @@ export default function HomePage() {
                   value={[targetClipCount]}
                   onValueChange={(values) => setTargetClipCount(values[0])}
                   data-testid="slider-clip-count"
+                  className="[&_[role=slider]]:bg-blue-500"
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-gray-400">
                   Number of short clips to generate ({CLIP_COUNT_CONFIG.min}-{CLIP_COUNT_CONFIG.max})
                 </p>
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="min-duration">Minimum Duration</Label>
-                  <span className="text-sm font-medium text-foreground" data-testid="text-min-duration">
+                  <Label htmlFor="min-duration" className="text-white">Minimum Duration</Label>
+                  <span className="text-sm font-medium text-white" data-testid="text-min-duration">
                     {minimumDuration}s
                   </span>
                 </div>
@@ -209,15 +205,16 @@ export default function HomePage() {
                   value={[minimumDuration]}
                   onValueChange={(values) => setMinimumDuration(values[0])}
                   data-testid="slider-min-duration"
+                  className="[&_[role=slider]]:bg-blue-500"
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-gray-400">
                   Minimum clip length in seconds ({DURATION_CONFIG.min}-{DURATION_CONFIG.max}s)
                 </p>
               </div>
 
               <Button
                 type="submit"
-                className="w-full h-12 text-base"
+                className="w-full h-12 text-base bg-blue-600 hover:bg-blue-700 text-white"
                 disabled={processVideoMutation.isPending}
                 data-testid="button-submit-urls"
               >
@@ -234,7 +231,7 @@ export default function HomePage() {
               <Button
                 asChild
                 variant="outline"
-                className="w-full h-12 text-base"
+                className="w-full h-12 text-base bg-white/5 border-white/20 text-white hover:bg-white/10 hover:text-white"
                 data-testid="button-view-videos"
               >
                 <Link href="/videos">
@@ -243,39 +240,18 @@ export default function HomePage() {
                 </Link>
               </Button>
             </form>
-          </CardContent>
-        </Card>
-
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="text-center p-4 rounded-lg bg-card border border-card-border">
-            <Zap className="h-6 w-6 text-primary mx-auto mb-2" />
-            <h3 className="text-sm font-medium text-foreground mb-1">
-              AI-Powered
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Automatic clip selection
-            </p>
-          </div>
-          <div className="text-center p-4 rounded-lg bg-card border border-card-border">
-            <TrendingUp className="h-6 w-6 text-primary mx-auto mb-2" />
-            <h3 className="text-sm font-medium text-foreground mb-1">
-              Virality Score
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Ranked by engagement potential
-            </p>
-          </div>
-          <div className="text-center p-4 rounded-lg bg-card border border-card-border">
-            <Video className="h-6 w-6 text-primary mx-auto mb-2" />
-            <h3 className="text-sm font-medium text-foreground mb-1">
-              Auto-Export
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Automatic conversion & export
-            </p>
           </div>
         </div>
       </div>
+
+      {/* Limit Reached Dialog */}
+      <LimitReachedDialog
+        open={showLimitDialog}
+        onOpenChange={setShowLimitDialog}
+        limitType="video"
+        current={3}
+        limit={3}
+      />
     </div>
   );
 }

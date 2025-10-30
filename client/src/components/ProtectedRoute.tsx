@@ -19,9 +19,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // Redirect to login if not authenticated
+  // Redirect to welcome page if not authenticated
   if (!user) {
-    return <Redirect to="/auth/login" />;
+    return <Redirect to="/welcome" />;
   }
 
   // Render protected content

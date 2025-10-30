@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { User, LogOut, Video, Settings } from 'lucide-react';
+import { User, LogOut, Video, Settings, Sparkles } from 'lucide-react';
 
 export function Header() {
   const { user, signOut } = useAuth();
@@ -35,6 +35,11 @@ export function Header() {
               <Link href="/videos">
                 <a className="text-sm font-medium text-gray-700 hover:text-primary">
                   Videos
+                </a>
+              </Link>
+              <Link href="/pricing">
+                <a className="text-sm font-medium text-gray-700 hover:text-primary">
+                  Pricing
                 </a>
               </Link>
 
@@ -82,6 +87,14 @@ export function Header() {
                       </a>
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/pricing">
+                      <a className="flex w-full items-center">
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Pricing
+                      </a>
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="text-red-600 focus:text-red-600"
@@ -95,6 +108,11 @@ export function Header() {
             </>
           ) : (
             <div className="flex items-center gap-2">
+              <Link href="/pricing">
+                <a className="text-sm font-medium text-gray-700 hover:text-primary">
+                  Pricing
+                </a>
+              </Link>
               <Link href="/auth/login">
                 <Button variant="ghost">Login</Button>
               </Link>

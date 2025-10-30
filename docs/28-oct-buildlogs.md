@@ -70,38 +70,6 @@ Implement Late.dev API integration for posting generated video clips to Instagra
 2. `server/routes.ts` - Added webhook handler + updated social posting logic
 3. `docs/phase5-webhook-setup.md` - Complete setup guide and troubleshooting
 
-**Debugging Session (4:30 PM PST):**
-
-**Issue 1: "createProfile is not a function" ❌**
-- Root Cause: server/services/late.ts was edited locally but never committed/pushed to Git
-- Render was building from GitHub source without the createProfile method
-- Fix: Committed and pushed late.ts (commit b92a813)
-- Result: ✅ Logs now show "createProfile type: function"
-
-**Issue 2: "Profile name is required" ✅**
-- Late.dev API requires `name` field in addition to email
-- Previous implementation only sent `{ email }`
-- API Error: 400 Bad Request - "Profile name is required"
-- Fix Applied:
-  1. Updated `createProfile(email, name)` to accept name parameter
-  2. Modified webhook to extract `full_name` from event.record
-  3. Added fallback: `const name = full_name || email.split('@')[0]`
-  4. Pass name to Late.dev API: `{ email, name }`
-- Committed: 8c371ea
-- Status: ✅ Fixed
-
-**Issue 3: "profileId: undefined" in logs ✅**
-- API call succeeded but logs showed: `{ profileId: undefined, email: undefined }`
-- Root Cause: Late.dev response structure is `{ profile: { _id, email } }`, not `{ _id, email }`
-- We were extracting `data._id` when it should be `data.profile._id`
-- Fix Applied:
-  1. Added raw response logging: `console.log('[Late Service] Raw API response:', ...)`
-  2. Discovered actual structure from production logs
-  3. Updated extraction: `const profileId = data.profile?._id || data.profile?.id || ...`
-  4. Updated email extraction: `const profileEmail = data.profile?.email || ...`
-- Committed: 80e601d (debug logging), a867295 (fix)
-- Status: ✅ Deployed to production
-
 **Next Manual Step:**
 Configure Supabase Database Webhook (see docs/phase5-webhook-setup.md):
 - Navigate to Database → Webhooks in Supabase Dashboard
@@ -3660,3 +3628,133 @@ Next steps:
 2. Store late_profile_id in users table
 3. Update social posting to use user's profile
 4. Test multi-user Instagram posting
+
+#CLAUDE PHASE 5 OUTPUT#
+
+⏺ Excellent! Let me mark this final task as complete and provide you with a
+  comprehensive summary:
+
+⏺ Phase 5: Late.dev Per-User Profiles - Complete! ✅
+
+  Time: 3:40 PM PST, October 28, 2025
+
+  I've successfully completed Phase 5 of the authentication implementation.
+  Here's what was accomplished:
+
+  Implementation Summary
+
+  1. Late.dev Service Enhancement (server/services/late.ts)
+
+  - ✅ Added createProfile(email) method to create unique Late.dev profiles
+  - ✅ Updated postToInstagram() to accept optional profileId and accountId
+  parameters
+  - ✅ Maintains backward compatibility with default hardcoded values
+  - ✅ Comprehensive error handling and logging
+
+  2. Webhook Handler (server/routes.ts)
+
+  - ✅ Created POST /api/auth/webhook endpoint (public, before auth middleware)
+  - ✅ Handles Supabase database INSERT events on public.users table
+  - ✅ Automatically creates Late.dev profile when new user signs up
+  - ✅ Updates user record with late_profile_id
+  - ✅ Graceful error handling - doesn't fail if profile creation fails
+
+  3. Social Posting Update (server/routes.ts)
+
+  - ✅ Updated POST /api/social/post to fetch user's Late profile
+  - ✅ Validates that user has a late_profile_id before posting
+  - ✅ Returns clear error message if profile not configured
+  - ✅ Uses user's profile ID when calling Late.dev API
+  - ✅ Falls back to default Instagram account ID until users connect their own
+
+  4. Documentation (docs/phase5-webhook-setup.md)
+
+  - ✅ Comprehensive setup guide for Supabase Database Webhooks
+  - ✅ Step-by-step configuration instructions
+  - ✅ Troubleshooting section
+  - ✅ Environment variables checklist
+  - ✅ Testing procedures
+
+  Files Modified
+
+  1. server/services/late.ts - Late.dev API service
+  2. server/routes.ts - Webhook handler and social posting logic
+  3. docs/28-oct-buildlogs.md - Build logs updated
+  4. docs/phase5-webhook-setup.md - Complete setup guide (NEW)
+
+  What Happens Now
+
+  Automatic Flow:
+  1. User signs up via Supabase Auth
+  2. New record inserted into public.users table
+  3. Supabase Database Webhook triggers
+  4. Webhook calls /api/auth/webhook with user data
+  5. Backend creates Late.dev profile via lateService.createProfile(email)
+  6. Backend updates user record with late_profile_id
+  7. User can now post to social media using their own Late profile
+
+  Next Manual Step Required
+
+  Configure Supabase Database Webhook:
+
+  You need to set up the webhook in Supabase Dashboard to activate this feature:
+
+  1. Go to:
+  https://supabase.com/dashboard/project/hfnmgonoxkjaqlelnqwc/database/hooks
+  2. Click Create a new hook
+  3. Configure:
+    - Name: user-signup-late-profile
+    - Table: public.users
+    - Events: Check only INSERT
+    - URL: https://streamline-mvp.onrender.com/api/auth/webhook
+    - Method: POST
+  4. Click Create hook
+
+  Full instructions: See docs/phase5-webhook-setup.md
+
+  Key Benefits
+
+  - ✅ True multi-tenancy - Each user gets their own Late.dev profile
+  - ✅ Automatic setup - No manual profile creation needed
+  - ✅ Scalable - Supports unlimited users
+  - ✅ Future-ready - Foundation for users connecting their own Instagram
+  accounts
+  - ✅ Error resilient - Graceful handling of Late.dev API failures
+
+  Testing
+
+  To test locally:
+  # Simulate webhook call
+  curl -X POST http://localhost:5000/api/auth/webhook \
+    -H "Content-Type: application/json" \
+    -d '{
+      "type": "INSERT",
+      "table": "users",
+      "record": {
+        "id": "test-uuid-123",
+        "email": "test@example.com"
+      }
+    }'
+
+  Check logs for:
+  [Auth Webhook] Received event: INSERT
+  [Auth Webhook] New user created: { userId: '...', email: '...' }
+  [Late Service] Creating profile for: test@example.com
+  [Late Service] Profile created successfully: { profileId: '...', email: '...'
+  }
+  [Auth Webhook] User updated with Late profile ID
+
+  What's Next?
+
+  Phase 6 Options:
+  1. Usage Limits - Implement free tier limits (3 videos/month, 3 posts/month)
+  2. User Settings - Allow users to connect their own Instagram accounts
+  3. Profile Management - UI for viewing/managing Late.dev profile
+  4. Multi-platform - Add support for TikTok, YouTube Shorts
+
+  Immediate Next Steps:
+  1. Configure the Supabase webhook (manual step above)
+  2. Test with a new user signup on production
+  3. Verify late_profile_id is populated in database
+
+  All code changes are complete and ready for deployment!

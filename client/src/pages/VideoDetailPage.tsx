@@ -72,10 +72,10 @@ export default function VideoDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 text-primary animate-spin mx-auto mb-4" />
-          <p className="text-sm text-muted-foreground">Loading details...</p>
+          <Loader2 className="h-8 w-8 text-blue-500 animate-spin mx-auto mb-4" />
+          <p className="text-sm text-gray-400">Loading details...</p>
         </div>
       </div>
     );
@@ -83,13 +83,13 @@ export default function VideoDetailPage() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-          <h2 className="text-xl font-medium text-foreground mb-2">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-medium text-white mb-2">
             Video Not Found
           </h2>
-          <p className="text-muted-foreground mb-6">
+          <p className="text-gray-400 mb-6">
             The requested video could not be found.
           </p>
           <Button asChild>
@@ -139,8 +139,8 @@ export default function VideoDetailPage() {
   const showExportButtons = task.status === "ready";
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-6 md:px-8 py-8">
+    <div className="min-h-screen bg-black">
+      <div className="max-w-7xl mx-auto px-6 md:px-8 pt-24 pb-8">
         <div className="mb-6">
           <Button variant="ghost" asChild data-testid="button-back">
             <Link href="/videos">
@@ -150,16 +150,16 @@ export default function VideoDetailPage() {
           </Button>
         </div>
 
-        <Card className="mb-8" data-testid="card-task-details">
+        <Card className="mb-8 bg-white/5 backdrop-blur-md border border-white/10 shadow-[0_1px_2px_rgba(0,0,0,0.25)] rounded-xl" data-testid="card-task-details">
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <CardTitle className="mb-2">
+                <CardTitle className="mb-2 text-white">
                   {isAutoExport
                     ? "Auto-Convert & Export"
                     : "Video Processing Status"}
                 </CardTitle>
-                <CardDescription className="font-mono text-xs break-all">
+                <CardDescription className="font-mono text-xs break-all text-white/70">
                   {task.sourceVideoUrl}
                 </CardDescription>
               </div>
@@ -174,11 +174,11 @@ export default function VideoDetailPage() {
             {isAutoExport ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-foreground">
+                  <p className="text-sm font-medium text-white">
                     {pipelineStatus}
                   </p>
                   {task.autoExportStatus === "processing" && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-gray-400">
                       {exports.filter((e) => e.status === "ready").length} of{" "}
                       {projects.length} complete
                     </p>
@@ -199,34 +199,34 @@ export default function VideoDetailPage() {
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">
+                <p className="text-xs text-white/60 mb-1">
                   Pipeline Status
                 </p>
-                <p className="text-sm font-medium text-foreground capitalize">
+                <p className="text-sm font-medium text-white capitalize">
                   {pipelineStatus}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Submitted</p>
-                <p className="text-sm font-medium text-foreground">
+                <p className="text-xs text-white/60 mb-1">Submitted</p>
+                <p className="text-sm font-medium text-white">
                   {formatDistanceToNow(new Date(task.createdAt), {
                     addSuffix: true,
                   })}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Task ID</p>
-                <p className="text-sm font-medium text-foreground font-mono">
+                <p className="text-xs text-white/60 mb-1">Task ID</p>
+                <p className="text-sm font-medium text-white font-mono">
                   {task.id.substring(0, 12)}...
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">
+                <p className="text-xs text-white/60 mb-1">
                   {isAutoExport && task.autoExportStatus === "ready"
                     ? "Ready to Download"
                     : "Shorts Generated"}
                 </p>
-                <p className="text-sm font-medium text-foreground">
+                <p className="text-sm font-medium text-white">
                   {projects.length}
                 </p>
               </div>
@@ -276,10 +276,10 @@ export default function VideoDetailPage() {
         {projects.length > 0 && (
           <div>
             <div className="mb-6">
-              <h2 className="text-xl font-semibold text-foreground mb-2">
+              <h2 className="text-xl font-semibold text-white mb-2">
                 Generated Shorts
               </h2>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-gray-400">
                 {projects.length} short{projects.length !== 1 ? "s" : ""}{" "}
                 extracted from your video
               </p>
@@ -316,13 +316,13 @@ export default function VideoDetailPage() {
         )}
 
         {task.status === "ready" && projects.length === 0 && (
-          <Card>
+          <Card className="bg-white/5 border-white/10">
             <CardContent className="py-12 text-center">
-              <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">
+              <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-white mb-2">
                 No Shorts Generated
               </h3>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-gray-400">
                 The video was processed but no short clips were extracted.
               </p>
             </CardContent>

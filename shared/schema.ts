@@ -116,6 +116,15 @@ export const userUsage = pgTable("user_usage", {
   pk: { name: "user_usage_pkey", columns: [table.userId, table.month] },
 }));
 
+// Stripe Events table - tracks processed webhook events for idempotency
+export const stripeEvents = pgTable("stripe_events", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: text("event_id").notNull().unique(),
+  eventType: text("event_type").notNull(),
+  processedAt: timestamp("processed_at").notNull().default(sql`now()`),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   tasks: many(tasks),
@@ -215,6 +224,15 @@ export const insertUserUsageSchema = createInsertSchema(userUsage, {
   updatedAt: true,
 });
 
+export const insertStripeEventSchema = createInsertSchema(stripeEvents, {
+  createdAt: () => z.date().optional(),
+  processedAt: () => z.date().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+  processedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -239,3 +257,6 @@ export type InsertSocialPost = z.infer<typeof insertSocialPostSchema>;
 
 export type UserUsage = typeof userUsage.$inferSelect;
 export type InsertUserUsage = z.infer<typeof insertUserUsageSchema>;
+
+export type StripeEvent = typeof stripeEvents.$inferSelect;
+export type InsertStripeEvent = z.infer<typeof insertStripeEventSchema>;

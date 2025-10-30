@@ -256,32 +256,34 @@ export default function SocialAccountsPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
+          <p className="text-sm text-gray-400">Loading accounts...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Social Accounts</h1>
-        <p className="text-muted-foreground mt-2">
-          Connect your social media accounts to post directly from Streamline
-        </p>
-      </div>
+    <div className="min-h-screen bg-black pt-24 pb-8 px-6">
+      <div className="container mx-auto max-w-4xl">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white">Social Accounts</h1>
+          <p className="text-gray-400 mt-2">
+            Connect your social media accounts to post directly from Streamline
+          </p>
+        </div>
 
-      {/* Connected Accounts Summary */}
-      {accounts.length > 0 && (
-        <Card className="mb-6">
+        {/* Connected Accounts Summary */}
+        {accounts.length > 0 && (
+        <Card className="mb-6 bg-white/5 backdrop-blur-md border border-white/10 shadow-[0_1px_2px_rgba(0,0,0,0.25)]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600" />
+            <CardTitle className="flex items-center gap-2 text-white">
+              <CheckCircle className="w-5 h-5 text-green-400" />
               Connected Accounts ({accounts.length})
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-gray-400">
               Your connected social media accounts
             </CardDescription>
           </CardHeader>
@@ -290,7 +292,7 @@ export default function SocialAccountsPage() {
               {accounts.map((account) => (
                 <div
                   key={account._id}
-                  className="flex items-center justify-between p-4 border rounded-lg"
+                  className="flex items-center justify-between p-4 border border-white/10 rounded-lg bg-white/5"
                 >
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-full text-white ${platformColors[account.platform]}`}>
@@ -298,12 +300,12 @@ export default function SocialAccountsPage() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="font-medium capitalize">{account.platform}</p>
-                        <Badge variant="outline" className="text-xs text-green-600 border-green-600">
+                        <p className="font-medium capitalize text-white">{account.platform}</p>
+                        <Badge variant="outline" className="text-xs text-green-400 border-green-400">
                           Connected
                         </Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-gray-400">
                         @{account.username}
                       </p>
                     </div>
@@ -320,74 +322,75 @@ export default function SocialAccountsPage() {
             </div>
           </CardContent>
         </Card>
-      )}
+        )}
 
-      {/* Available Platforms */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Connect New Account</CardTitle>
-          <CardDescription>
-            Choose a platform to connect your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {AVAILABLE_PLATFORMS.map((platform) => {
-              const connected = isConnected(platform.id);
-              const account = getConnectedAccount(platform.id);
-              const isConnecting = connectingPlatform === platform.id;
+        {/* Available Platforms */}
+        <Card className="bg-white/5 backdrop-blur-md border border-white/10 shadow-[0_1px_2px_rgba(0,0,0,0.25)]">
+          <CardHeader>
+            <CardTitle className="text-white">Connect New Account</CardTitle>
+            <CardDescription className="text-gray-400">
+              Choose a platform to connect your account
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {AVAILABLE_PLATFORMS.map((platform) => {
+                const connected = isConnected(platform.id);
+                const account = getConnectedAccount(platform.id);
+                const isConnecting = connectingPlatform === platform.id;
 
-              return (
-                <div
-                  key={platform.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:border-primary transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-full text-white ${platformColors[platform.id]}`}>
-                      <PlatformIcon platform={platform.id} />
-                    </div>
-                    <div>
-                      <p className="font-medium">{platform.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {connected ? `Connected as @${account?.username}` : platform.description}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={() => handleConnect(platform.id)}
-                    disabled={isConnecting}
-                    variant={connected ? "outline" : "default"}
+                return (
+                  <div
+                    key={platform.id}
+                    className="flex items-center justify-between p-4 border border-white/10 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
                   >
-                    {isConnecting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Connecting...
-                      </>
-                    ) : connected ? (
-                      <>
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Reconnect
-                      </>
-                    ) : (
-                      <>
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                        Connect
-                      </>
-                    )}
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-full text-white ${platformColors[platform.id]}`}>
+                        <PlatformIcon platform={platform.id} />
+                      </div>
+                      <div>
+                        <p className="font-medium text-white">{platform.name}</p>
+                        <p className="text-sm text-gray-400">
+                          {connected ? `Connected as @${account?.username}` : platform.description}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => handleConnect(platform.id)}
+                      disabled={isConnecting}
+                      variant={connected ? "outline" : "default"}
+                    >
+                      {isConnecting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Connecting...
+                        </>
+                      ) : connected ? (
+                        <>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Reconnect
+                        </>
+                      ) : (
+                        <>
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Connect
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Help Text */}
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-sm text-blue-900">
-          <strong>Note:</strong> You'll be redirected to authorize Streamline to post on your behalf.
-          We'll never post without your explicit permission.
-        </p>
+        {/* Help Text */}
+        <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+          <p className="text-sm text-blue-400">
+            <strong>Note:</strong> You'll be redirected to authorize Streamline to post on your behalf.
+            We'll never post without your explicit permission.
+          </p>
+        </div>
       </div>
     </div>
   );

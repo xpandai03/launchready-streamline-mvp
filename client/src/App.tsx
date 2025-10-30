@@ -1,31 +1,48 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { Header } from "@/components/Header";
+import { Navbar } from "@/components/ui/mini-navbar";
 import HomePage from "@/pages/HomePage";
 import VideoListPage from "@/pages/VideoListPage";
 import VideoDetailPage from "@/pages/VideoDetailPage";
 import LoginPage from "@/pages/auth/LoginPage";
 import SignupPage from "@/pages/auth/SignupPage";
 import SocialAccountsPage from "@/pages/settings/SocialAccountsPage";
+import BillingSettingsPage from "@/pages/settings/BillingSettingsPage";
 import OAuthCallbackPage from "@/pages/OAuthCallbackPage";
+import PricingPage from "@/pages/PricingPage";
+import BillingSuccessPage from "@/pages/billing/SuccessPage";
+import BillingCancelPage from "@/pages/billing/CancelPage";
+import PreLoginPage from "@/pages/PreLoginPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
+  const [location] = useLocation();
+  // Show navbar on all pages except public landing/auth pages
+  const showNavbar = !["/welcome", "/auth/login", "/auth/signup"].includes(location);
+
   return (
     <>
-      <Header />
+      {showNavbar && <Navbar />}
       <Switch>
+        {/* Welcome/Landing page - public */}
+        <Route path="/welcome" component={PreLoginPage} />
+
         {/* Auth routes - public */}
         <Route path="/auth/login" component={LoginPage} />
         <Route path="/auth/signup" component={SignupPage} />
 
         {/* OAuth callback - public */}
         <Route path="/oauth-callback" component={OAuthCallbackPage} />
+
+        {/* Pricing & Billing routes - public (pricing page handles auth internally) */}
+        <Route path="/pricing" component={PricingPage} />
+        <Route path="/billing/success" component={BillingSuccessPage} />
+        <Route path="/billing/cancel" component={BillingCancelPage} />
 
         {/* Protected routes - require authentication */}
         <Route path="/">
@@ -43,9 +60,19 @@ function Router() {
             <VideoDetailPage />
           </ProtectedRoute>
         </Route>
+        <Route path="/socials">
+          <ProtectedRoute>
+            <SocialAccountsPage />
+          </ProtectedRoute>
+        </Route>
         <Route path="/settings/social-accounts">
           <ProtectedRoute>
             <SocialAccountsPage />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/settings/billing">
+          <ProtectedRoute>
+            <BillingSettingsPage />
           </ProtectedRoute>
         </Route>
 
