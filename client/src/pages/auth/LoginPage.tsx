@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
-import { AuthHeader } from '@/components/AuthHeader';
 import Floating, { FloatingElement } from '@/components/ui/parallax-floating';
 
 const exampleImages = [
@@ -83,8 +82,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full bg-black overflow-hidden relative" ref={scope}>
-      <AuthHeader />
-
       {/* Floating parallax images */}
       <Floating sensitivity={-1} className="overflow-hidden">
         <FloatingElement depth={0.5} className="top-[8%] left-[11%]">
