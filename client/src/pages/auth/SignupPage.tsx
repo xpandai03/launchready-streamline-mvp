@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
-import { AuthHeader } from '@/components/AuthHeader';
 import Floating, { FloatingElement } from '@/components/ui/parallax-floating';
+import { GoogleSignInButton } from '@/components/GoogleSignInButton';
 
 const exampleImages = [
   {
@@ -99,8 +99,6 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen w-full bg-black overflow-hidden relative" ref={scope}>
-      <AuthHeader />
-
       {/* Floating parallax images */}
       <Floating sensitivity={-1} className="overflow-hidden">
         <FloatingElement depth={0.5} className="top-[8%] left-[11%]">
@@ -185,6 +183,18 @@ export default function SignupPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* OAuth Sign In */}
+            <div className="space-y-3 mb-6">
+              <GoogleSignInButton />
+
+              {/* Divider */}
+              <div className="relative flex items-center py-4">
+                <div className="flex-1 border-t border-white/10"></div>
+                <span className="px-4 text-sm text-white/60">or continue with email</span>
+                <div className="flex-1 border-t border-white/10"></div>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email" className="text-white">Email</Label>
               <Input
