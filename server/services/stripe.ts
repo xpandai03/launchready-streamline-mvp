@@ -46,6 +46,12 @@ export const stripeService = {
     params: CreateCheckoutSessionParams
   ): Promise<CheckoutSessionResponse> {
     if (!stripe || !STRIPE_PRICE_ID_PRO) {
+      console.error('[Stripe] Configuration check failed:', {
+        stripeInitialized: !!stripe,
+        secretKeyPresent: !!STRIPE_SECRET_KEY,
+        priceIdPresent: !!STRIPE_PRICE_ID_PRO,
+        priceIdValue: STRIPE_PRICE_ID_PRO ? `${STRIPE_PRICE_ID_PRO.substring(0, 10)}...` : 'undefined'
+      });
       throw new Error('Stripe is not configured');
     }
 
