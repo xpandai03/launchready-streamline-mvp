@@ -1,14 +1,14 @@
 /**
- * UGC Ad Preview Modal - Phase 4.6.2 (Fixed)
+ * UGC Ad Preview Modal - Phase 4.6.5 (Hook Order Fixed)
  *
  * Proper overlay modal for viewing and acting on AI-generated UGC ads
- * - Fixed: Modal now appears as overlay, not full page
- * - Fixed: Crash protection for missing/undefined URLs
+ * - Fixed: React hook order - all hooks called before conditionals
+ * - Fixed: Early returns moved after all hook calls
  * - Displays image or video preview with fallback
  * - Actions: Use for Video, Post, Schedule, Download
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -62,20 +62,25 @@ interface UGCAdPreviewModalProps {
 }
 
 export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
+  // ========================================
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONALS
+  // ========================================
+
+  // State hooks
   const [caption, setCaption] = useState('');
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduledDateTime, setScheduledDateTime] = useState('');
   const [showPostFlow, setShowPostFlow] = useState(false);
+  const [error, setError] = useState(false);
+
+  // Context hooks
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  console.log('[UGC Modal] Rendered with asset:', asset ? asset.id : 'null');
+  // Memoized URL extraction with crash protection
+  const mediaUrl = useMemo(() => {
+    if (!asset) return '';
 
-  // Early return if no asset
-  if (!asset) return null;
-
-  // Robust URL extraction with crash protection
-  const getMediaUrl = (): string => {
     try {
       return (
         asset?.resultUrl ||
@@ -89,27 +94,27 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
       );
     } catch (error) {
       console.error('[UGC Modal] Error extracting media URL:', error);
+      setError(true);
       return '';
     }
-  };
+  }, [asset]);
 
-  const mediaUrl = getMediaUrl();
-
-  // Format provider name safely
-  const formatProviderName = (provider?: string) => {
-    if (!provider) return 'Unknown Provider';
+  // Memoized provider name formatting
+  const providerName = useMemo(() => {
+    if (!asset?.provider) return 'Unknown Provider';
     const providerNames: Record<string, string> = {
       'kie-veo3': 'KIE Veo3',
       'kie-4o-image': 'KIE 4O Image',
       'kie-flux-kontext': 'KIE Flux Kontext',
       'gemini-flash': 'Gemini Flash',
     };
-    return providerNames[provider] || provider;
-  };
+    return providerNames[asset.provider] || asset.provider;
+  }, [asset?.provider]);
 
   // Use for Video mutation (image → video)
   const useForVideoMutation = useMutation({
     mutationFn: async () => {
+      if (!asset) throw new Error('No asset selected');
       const response = await apiRequest('POST', '/api/ai/media/use-for-video', {
         sourceAssetId: asset.id,
       });
@@ -171,6 +176,10 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
     },
   });
 
+  // ========================================
+  // EVENT HANDLERS
+  // ========================================
+
   const handleUseForVideo = () => {
     useForVideoMutation.mutate();
   };
@@ -189,13 +198,28 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
       setIsScheduled(false);
       setScheduledDateTime('');
       setShowPostFlow(false);
+      setError(false);
       postMutation.reset();
       useForVideoMutation.reset();
       onClose();
     }
   };
 
-  console.log('[UGC Modal] Rendering Dialog with open:', !!asset, 'mediaUrl:', mediaUrl);
+  const handleMediaError = (type: 'image' | 'video') => {
+    console.error(`[UGC Modal] ${type} load error for asset:`, asset?.id);
+    setError(true);
+  };
+
+  // ========================================
+  // CONDITIONAL RENDERING (AFTER ALL HOOKS)
+  // ========================================
+
+  console.log('[UGC Modal] Rendered with asset:', asset ? asset.id : 'null', 'mediaUrl:', mediaUrl);
+
+  // Early return AFTER all hooks have been called
+  if (!asset) return null;
+
+  console.log('[UGC Modal] Rendering Dialog with open:', !!asset, 'error:', error);
 
   return (
     <Dialog open={!!asset} onOpenChange={handleClose}>
@@ -209,7 +233,7 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
           </DialogTitle>
           <DialogDescription id="ugc-ad-preview-description" className="text-white/70">
             <div className="flex items-center gap-2 text-sm mt-2">
-              <span>{formatProviderName(asset.provider)}</span>
+              <span>{providerName}</span>
               <span>•</span>
               <span>
                 {asset.createdAt
@@ -224,16 +248,21 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
         <div className="space-y-4">
           {/* Media Preview with crash protection */}
           <div className="flex justify-center items-center bg-black/40 rounded-lg p-6 min-h-[300px]">
-            {mediaUrl ? (
+            {error ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <XCircle className="h-12 w-12 text-red-400/50 mb-3" />
+                <p className="text-sm text-red-300/70 text-center max-w-md">
+                  Failed to load media preview. The file may be unavailable or corrupted.
+                </p>
+              </div>
+            ) : mediaUrl ? (
               asset.type === 'video' ? (
                 <video
                   src={mediaUrl}
                   controls
                   className="max-h-[500px] rounded-lg shadow-xl"
                   preload="metadata"
-                  onError={(e) => {
-                    console.error('[UGC Modal] Video load error:', e);
-                  }}
+                  onError={() => handleMediaError('video')}
                 >
                   Your browser does not support the video tag.
                 </video>
@@ -242,10 +271,7 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
                   src={mediaUrl}
                   alt={asset.prompt || 'UGC Ad'}
                   className="max-h-[500px] rounded-lg shadow-xl object-contain"
-                  onError={(e) => {
-                    console.error('[UGC Modal] Image load error:', e);
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
+                  onError={() => handleMediaError('image')}
                 />
               )
             ) : (
@@ -273,7 +299,7 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
           )}
 
           {/* Actions - Only show for ready status with valid URL */}
-          {asset.status === 'ready' && !showPostFlow && mediaUrl && (
+          {asset.status === 'ready' && !showPostFlow && mediaUrl && !error && (
             <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
               {/* Use for Video (only for images) */}
               {asset.type === 'image' && (
