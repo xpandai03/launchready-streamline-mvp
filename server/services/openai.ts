@@ -1,0 +1,205 @@
+/**
+ * OpenAI API Service
+ *
+ * Wrapper for OpenAI API - handles AI caption generation for Instagram posts
+ * Documentation: https://platform.openai.com/docs/api-reference
+ */
+
+// Support both OPENAI_API_KEY and OPEN_AI_API_KEY (legacy)
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.OPEN_AI_API_KEY;
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
+const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+
+// Validation: Ensure API key is configured
+if (!OPENAI_API_KEY) {
+  console.warn('[OpenAI Service] Warning: OPENAI_API_KEY is not configured in environment');
+}
+
+/**
+ * Parameters for caption generation
+ */
+export interface GenerateCaptionParams {
+  projectName: string;          // Video/project title from Klap
+  videoUrl?: string;            // Optional: for future vision analysis
+  customPrompt?: string;        // Optional: override user's system prompt for this generation
+  userSystemPrompt?: string;    // User's default caption writing style/instructions
+}
+
+/**
+ * Caption generation response
+ */
+export interface CaptionGenerationResult {
+  caption: string;
+  metadata: {
+    model: string;
+    tokensUsed?: number;
+    generatedAt: string;
+    promptUsed: string;
+  };
+}
+
+/**
+ * Default system prompt for caption generation
+ * Used when user hasn't configured a custom prompt
+ */
+const DEFAULT_SYSTEM_PROMPT = `You are an expert Instagram caption writer. Create engaging, authentic captions that:
+- Are concise but compelling (2-3 sentences)
+- Include 2-3 relevant emojis naturally placed
+- End with a call-to-action or question to drive engagement
+- Match the tone and content of the video
+- Avoid hashtags (user will add separately)
+- Sound natural and conversational, not robotic`;
+
+/**
+ * OpenAI Service
+ *
+ * Handles all interactions with the OpenAI API
+ */
+export const openaiService = {
+  /**
+   * Generate an Instagram caption using AI
+   *
+   * @param params - Video title and optional customization
+   * @returns Generated caption with metadata
+   * @throws Error if API call fails
+   */
+  async generateCaption(params: GenerateCaptionParams): Promise<CaptionGenerationResult> {
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY is not configured. Please add it to your environment variables.');
+    }
+
+    const systemPrompt = params.customPrompt || params.userSystemPrompt || DEFAULT_SYSTEM_PROMPT;
+
+    console.log('[OpenAI Service] Generating caption:', {
+      projectName: params.projectName.substring(0, 50) + '...',
+      hasCustomPrompt: !!params.customPrompt,
+      hasUserPrompt: !!params.userSystemPrompt,
+      model: OPENAI_MODEL,
+    });
+
+    const userMessage = `Write an Instagram caption for a video titled: "${params.projectName}"`;
+
+    try {
+      const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt,
+            },
+            {
+              role: 'user',
+              content: userMessage,
+            },
+          ],
+          temperature: 0.8, // Higher temperature for more creative captions
+          max_tokens: 300,  // Instagram captions can be up to 2200 chars, but 300 tokens is ~200 words
+        }),
+      });
+
+      // Safe response parsing (following Instagram posting fix pattern)
+      const responseText = await response.text();
+
+      if (responseText.trim() === '') {
+        console.error('[OpenAI Service] Empty response body received');
+        throw new Error(`OpenAI API returned empty response (HTTP ${response.status})`);
+      }
+
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('[OpenAI Service] JSON parse error:', parseError);
+        console.error('[OpenAI Service] Raw response:', responseText.substring(0, 200));
+        throw new Error(`OpenAI API returned invalid JSON (HTTP ${response.status}): ${responseText.substring(0, 200)}`);
+      }
+
+      if (!response.ok) {
+        console.error('[OpenAI Service] API Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: data,
+        });
+
+        const errorMessage = data.error?.message || data.error || 'Unknown error from OpenAI API';
+        throw new Error(`OpenAI API Error (${response.status}): ${errorMessage}`);
+      }
+
+      // Extract caption from response
+      const caption = data.choices?.[0]?.message?.content?.trim();
+
+      if (!caption) {
+        console.error('[OpenAI Service] No caption in response:', data);
+        throw new Error('OpenAI API returned no caption content');
+      }
+
+      const result: CaptionGenerationResult = {
+        caption,
+        metadata: {
+          model: data.model || OPENAI_MODEL,
+          tokensUsed: data.usage?.total_tokens,
+          generatedAt: new Date().toISOString(),
+          promptUsed: systemPrompt.substring(0, 100) + '...', // Store snippet for debugging
+        },
+      };
+
+      console.log('[OpenAI Service] Caption generated successfully:', {
+        captionLength: caption.length,
+        tokensUsed: result.metadata.tokensUsed,
+        model: result.metadata.model,
+      });
+
+      return result;
+    } catch (error) {
+      // Re-throw with more context if it's a network error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to reach OpenAI API. Please check your internet connection.');
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Test connection to OpenAI API
+   *
+   * Validates that the API key is correct and the service is reachable
+   *
+   * @returns True if connection is successful
+   */
+  async testConnection(): Promise<boolean> {
+    if (!OPENAI_API_KEY) {
+      console.error('[OpenAI Service] Cannot test connection: OPENAI_API_KEY not configured');
+      return false;
+    }
+
+    try {
+      console.log('[OpenAI Service] Testing connection to OpenAI API...');
+
+      // Simple test: list available models
+      const response = await fetch(`${OPENAI_BASE_URL}/models`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        },
+      });
+
+      if (response.ok) {
+        console.log('[OpenAI Service] ✓ Connection successful');
+        return true;
+      } else {
+        const data = await response.json();
+        console.error('[OpenAI Service] ✗ Connection failed:', response.status, data);
+        return false;
+      }
+    } catch (error) {
+      console.error('[OpenAI Service] ✗ Connection test error:', error);
+      return false;
+    }
+  },
+};

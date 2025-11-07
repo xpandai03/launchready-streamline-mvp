@@ -14,6 +14,11 @@ export const users = pgTable("users", {
   stripeCustomerId: text("stripe_customer_id"),
   subscriptionStatus: text("subscription_status").default("free"),
   subscriptionEndsAt: timestamp("subscription_ends_at"),
+  // AI Caption Settings (Phase 2)
+  captionSystemPrompt: text("caption_system_prompt").default(
+    "Write an engaging Instagram caption for this video. Be creative, use relevant emojis, and include a call-to-action."
+  ),
+  captionAutoGenerate: text("caption_auto_generate").default("true").notNull(), // "true" or "false" string for compatibility
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
@@ -97,6 +102,9 @@ export const socialPosts = pgTable("social_posts", {
   latePostId: text("late_post_id"), // Late.dev post ID
   platformPostUrl: text("platform_post_url"), // Public URL on social platform
   caption: text("caption"),
+  // AI Caption Metadata (Phase 2)
+  captionSource: text("caption_source"), // "manual", "ai_auto", "ai_manual"
+  aiCaptionMetadata: jsonb("ai_caption_metadata"), // {model, tokensUsed, generatedAt, promptUsed}
   status: text("status").notNull(), // posting, published, failed
   errorMessage: text("error_message"),
   lateResponse: jsonb("late_response"), // Full Late API response

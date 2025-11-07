@@ -1063,13 +1063,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Social Post] Using Late profile: ${user.lateProfileId}, account: ${accountId}`);
 
+      // Phase 2.5: AI Caption Generation Integration
+      let finalCaption = caption || '';
+      let captionSource: 'manual' | 'ai_auto' | 'ai_manual' = 'manual';
+      let aiMetadata: any = null;
+
+      // Auto-generate caption if empty and user has auto-generate enabled
+      if (!finalCaption && user.captionAutoGenerate === 'true') {
+        console.log('[Caption] Auto-generating caption (empty caption + auto-mode enabled)');
+
+        try {
+          const { openaiService } = await import("./services/openai.js");
+          const result = await openaiService.generateCaption({
+            projectName: project.name,
+            userSystemPrompt: user.captionSystemPrompt || undefined,
+          });
+
+          finalCaption = result.caption;
+          captionSource = 'ai_auto';
+          aiMetadata = result.metadata;
+
+          console.log(`[Caption] Auto-generated caption: "${finalCaption.substring(0, 50)}..."`);
+        } catch (captionError: any) {
+          // Graceful fallback: if caption generation fails, continue with empty caption
+          console.error('[Caption] Failed to auto-generate caption, continuing with empty:', captionError.message);
+          // captionSource remains 'manual', aiMetadata remains null
+        }
+      } else if (finalCaption) {
+        console.log('[Caption] Using manual caption provided by user');
+      } else {
+        console.log('[Caption] No caption (auto-generate disabled or failed)');
+      }
+
       // Create initial social post record
       const socialPost = await storage.createSocialPost({
         projectId,
         taskId: project.taskId,
         userId: req.userId!, // ✅ FIX: Add required userId from authenticated session
         platform,
-        caption: caption || '',
+        caption: finalCaption,
+        captionSource,
+        aiCaptionMetadata: aiMetadata,
         status: 'posting',
         latePostId: null,
         platformPostUrl: null,
@@ -1078,14 +1112,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         publishedAt: null,
       });
 
-      console.log(`[Social Post] Created social post record: ${socialPost.id}`);
+      console.log(`[Social Post] Created social post record: ${socialPost.id} (caption source: ${captionSource})`);
 
       // Post to Instagram via Late API using user's profile
       try {
         const lateResponse = await lateService.postToInstagram(
           {
             videoUrl: projectExport.srcUrl,
-            caption: caption || '',
+            caption: finalCaption,
             contentType: 'reel',
           },
           user.lateProfileId,  // User's Late profile ID
@@ -1203,6 +1237,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("[Social Post] Error fetching social posts:", error);
       res.status(500).json({
         error: "Failed to fetch social posts",
+        details: error.message,
+      });
+    }
+  });
+
+  // ========================================
+  // AI CAPTION GENERATION ENDPOINTS (Phase 2)
+  // ========================================
+
+  // GET /api/user/caption-settings - Get user's caption generation settings
+  app.get("/api/user/caption-settings", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      res.json({
+        systemPrompt: user.captionSystemPrompt || "Write an engaging Instagram caption for this video. Be creative, use relevant emojis, and include a call-to-action.",
+        autoGenerate: user.captionAutoGenerate === "true",
+      });
+    } catch (error: any) {
+      console.error("[Caption Settings] Error fetching settings:", error);
+      res.status(500).json({
+        error: "Failed to fetch caption settings",
+        details: error.message,
+      });
+    }
+  });
+
+  // PUT /api/user/caption-settings - Update user's caption generation settings
+  app.put("/api/user/caption-settings", requireAuth, async (req, res) => {
+    try {
+      const { updateCaptionSettingsSchema } = await import("./validators/caption.js");
+      const validation = updateCaptionSettingsSchema.safeParse(req.body);
+
+      if (!validation.success) {
+        return res.status(400).json({
+          error: "Validation failed",
+          details: validation.error.errors,
+        });
+      }
+
+      const { systemPrompt, autoGenerate } = validation.data;
+      const updates: any = {};
+
+      if (systemPrompt !== undefined) {
+        updates.captionSystemPrompt = systemPrompt;
+      }
+
+      if (autoGenerate !== undefined) {
+        updates.captionAutoGenerate = autoGenerate ? "true" : "false";
+      }
+
+      const updatedUser = await storage.updateUser(req.userId!, updates);
+
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      console.log(`[Caption Settings] Updated for user ${req.userId}`);
+
+      res.json({
+        success: true,
+        systemPrompt: updatedUser.captionSystemPrompt,
+        autoGenerate: updatedUser.captionAutoGenerate === "true",
+      });
+    } catch (error: any) {
+      console.error("[Caption Settings] Error updating settings:", error);
+      res.status(500).json({
+        error: "Failed to update caption settings",
+        details: error.message,
+      });
+    }
+  });
+
+  // POST /api/caption/generate - Generate AI caption for a specific project
+  app.post("/api/caption/generate", requireAuth, async (req, res) => {
+    try {
+      const { generateCaptionSchema } = await import("./validators/caption.js");
+      const validation = generateCaptionSchema.safeParse(req.body);
+
+      if (!validation.success) {
+        return res.status(400).json({
+          error: "Validation failed",
+          details: validation.error.errors,
+        });
+      }
+
+      const { projectId, customPrompt } = validation.data;
+
+      // Get the project
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Verify ownership
+      const task = await storage.getTask(project.taskId);
+      if (!task || task.userId !== req.userId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Get user's caption settings
+      const user = await storage.getUser(req.userId!);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      console.log(`[Caption Generate] Generating caption for project ${projectId}`);
+
+      // Generate caption using OpenAI
+      const { openaiService } = await import("./services/openai.js");
+      const result = await openaiService.generateCaption({
+        projectName: project.name,
+        customPrompt,
+        userSystemPrompt: user.captionSystemPrompt || undefined,
+      });
+
+      res.json({
+        success: true,
+        caption: result.caption,
+        metadata: result.metadata,
+      });
+    } catch (error: any) {
+      console.error("[Caption Generate] Error generating caption:", error);
+      res.status(500).json({
+        error: "Failed to generate caption",
         details: error.message,
       });
     }
