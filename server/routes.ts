@@ -1676,8 +1676,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Check if complete
           if (statusResult.status === 'ready') {
-            // Ensure result URL is saved
-            const finalResultUrl = statusResult.resultUrl;
+            // Extract URL from all possible KIE response paths
+            const finalResultUrl =
+              statusResult.resultUrl ||
+              statusResult.metadata?.response?.resultUrls?.[0] ||
+              statusResult.metadata?.resultUrls?.[0] ||
+              statusResult.metadata?.outputs?.[0]?.url ||
+              statusResult.metadata?.resources?.[0]?.url ||
+              '';
 
             await storage.updateMediaAsset(assetId, {
               status: 'ready',
