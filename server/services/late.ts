@@ -184,6 +184,17 @@ export const lateService = {
     console.log('[Late Service] Request body:', JSON.stringify(requestBody, null, 2));
 
     try {
+      // Phase 1 Debug: Log complete request metadata
+      console.log('[Late Debug] Request:', {
+        url: `${LATE_BASE_URL}/posts`,
+        videoUrl: params.videoUrl,
+        caption: params.caption?.substring(0, 50),
+        profileId: profileId || 'none',
+        accountId: instagramAccountId,
+        bodySize: JSON.stringify(requestBody).length,
+        timestamp: new Date().toISOString(),
+      });
+
       const response = await fetch(`${LATE_BASE_URL}/posts`, {
         method: 'POST',
         headers: {
@@ -193,7 +204,32 @@ export const lateService = {
         body: JSON.stringify(requestBody),
       });
 
-      const data = await response.json();
+      // Phase 1 Debug: Capture raw response metadata
+      console.log('[Late Debug] Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        contentType: response.headers.get('content-type'),
+      });
+
+      // Phase 3 Fix: Read response as text first to handle empty/malformed responses
+      const responseText = await response.text();
+      console.log('[Late Debug] Raw body:', responseText.substring(0, 500));
+
+      // Phase 3 Fix: Parse JSON safely with proper error handling
+      let data: any;
+      if (responseText.trim() === '') {
+        console.error('[Late Service] Empty response body received');
+        throw new Error(`Late API returned empty response (HTTP ${response.status})`);
+      }
+
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('[Late Service] JSON parse error:', parseError);
+        console.error('[Late Service] Raw response:', responseText);
+        throw new Error(`Late API returned invalid JSON (HTTP ${response.status}): ${responseText.substring(0, 200)}`);
+      }
 
       if (!response.ok) {
         console.error('[Late Service] API Error:', {

@@ -1021,6 +1021,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Social Post] Using export URL: ${projectExport.srcUrl.substring(0, 50)}...`);
 
+      // Phase 2: Validate video URL format
+      if (!projectExport.srcUrl.startsWith('https://')) {
+        console.error(`[Social Post] Invalid video URL format: ${projectExport.srcUrl}`);
+        return res.status(400).json({
+          error: 'Invalid video URL',
+          details: 'Video URL must be HTTPS. The export may have failed or URL is malformed.'
+        });
+      }
+
+      console.log('[Validation] ✓ Video URL format valid (HTTPS)');
+      console.log('[Validation] Full URL:', projectExport.srcUrl);
+
       // Get user's Late.dev profile information
       const user = await storage.getUser(req.userId!);
       if (!user) {
@@ -1039,6 +1051,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For now, use the default Instagram account ID until users can connect their own
       // In the future, this will come from user.lateAccountId
       const accountId = user.lateAccountId || process.env.INSTAGRAM_ACCOUNT_ID || '6900d2cd8bbca9c10cbfff74';
+
+      // Phase 2: Validate required parameters before posting
+      if (!accountId) {
+        console.error(`[Social Post] No Instagram account ID available for user ${req.userId}`);
+        return res.status(400).json({
+          error: 'Instagram account ID required',
+          details: 'Please connect your Instagram account or ensure default account is configured'
+        });
+      }
 
       console.log(`[Social Post] Using Late profile: ${user.lateProfileId}, account: ${accountId}`);
 
