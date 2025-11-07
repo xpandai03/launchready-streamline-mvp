@@ -10,7 +10,8 @@
     "start:migrate": "npm run migrate:uuid && npm run start",
     "check": "tsc",
     "db:push": "drizzle-kit push",
-    "migrate:uuid": "tsx scripts/apply-uuid-migration.ts"
+    "migrate:uuid": "tsx scripts/apply-uuid-migration.ts",
+    "backfill:media-urls": "tsx scripts/backfill-media-urls.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
