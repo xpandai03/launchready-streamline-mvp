@@ -59,7 +59,7 @@ export function Navbar() {
   );
 
   const navLinksData = [
-    { label: 'My Videos', href: '/videos' },
+    { label: 'My Clips', href: '/videos' },
     { label: 'UGC Ads', href: '/ai-studio' },
     { label: 'Socials', href: '/socials' },
     { label: 'Pricing', href: '/pricing' },
