@@ -127,13 +127,13 @@ export default function AIStudioPage() {
     },
   });
 
-  // Handle type change (auto-switch provider)
+  // Handle type change (auto-switch provider - hardcoded for UGC ads)
   const handleTypeChange = (newType: 'image' | 'video') => {
     setType(newType);
     if (newType === 'video') {
-      setProvider('kie-veo3'); // Only video provider
+      setProvider('kie-veo3'); // Hardcoded: KIE Veo3 for video
     } else {
-      setProvider('kie-4o-image'); // Default image provider
+      setProvider('kie-4o-image'); // Hardcoded: KIE 4O Image for images (fast)
     }
   };
 
@@ -177,20 +177,27 @@ export default function AIStudioPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
-            AI Studio
+            UGC Ad Studio
           </h1>
-          <p className="text-white/70">
-            Generate stunning images and videos with AI
+          <p className="text-white/70 mb-3">
+            Generate influencer-style videos and images for your products with AI
           </p>
+          <a
+            href="#"
+            className="text-sm text-blue-400 hover:text-blue-300 transition-colors inline-flex items-center gap-1"
+          >
+            <span>New? Watch the 1-minute demo on how to create your first UGC ad</span>
+            <span>→</span>
+          </a>
         </div>
 
         {/* Generation Form Card */}
         <Card className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl mb-12">
           <CardContent className="p-6 md:p-8">
             <form onSubmit={handleGenerate} className="space-y-6">
-              {/* Type Selector (Image/Video) */}
+              {/* Ad Format Selector (Image/Video) */}
               <div className="space-y-2">
-                <Label className="text-white text-sm font-medium">Media Type</Label>
+                <Label className="text-white text-sm font-medium">Ad Format</Label>
                 <div className="flex gap-3">
                   <Button
                     type="button"
@@ -211,120 +218,128 @@ export default function AIStudioPage() {
                     Video
                   </Button>
                 </div>
+                <p className="text-xs text-white/50">
+                  Choose what kind of ad you want to make
+                </p>
               </div>
 
-              {/* Provider Selector */}
+              {/* AI Model Info (Read-only) */}
+              <div className="rounded-lg bg-white/5 border border-white/10 px-4 py-3">
+                <p className="text-xs text-white/70">
+                  {type === 'video' ? (
+                    <>
+                      <span className="font-medium text-white">Powered by KIE Veo3</span> — 8-second UGC-style videos (16:9 format)
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium text-white">Powered by KIE 4O Image</span> — Fast, realistic UGC ad images
+                    </>
+                  )}
+                </p>
+              </div>
+
+              {/* Scene Description */}
               <div className="space-y-2">
-                <Label htmlFor="provider" className="text-white text-sm font-medium">
-                  AI Provider
-                </Label>
-                <Select value={provider} onValueChange={setProvider}>
-                  <SelectTrigger
-                    id="provider"
-                    className="bg-white/10 border-white/20 text-white"
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="prompt" className="text-white text-sm font-medium">
+                    Describe Your Scene
+                  </Label>
+                  <button
+                    type="button"
+                    className="text-white/50 hover:text-white/70 transition-colors"
+                    title="Tip: Pretend you're briefing a real influencer. Mention who's in the scene, what they're doing, and what they say about your product."
                   >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {type === 'image' && (
-                      <>
-                        <SelectItem value="kie-4o-image">
-                          KIE 4O Image (Fast)
-                        </SelectItem>
-                        <SelectItem value="kie-flux-kontext">
-                          KIE Flux Kontext (HD Quality)
-                        </SelectItem>
-                        <SelectItem value="gemini-flash">
-                          Gemini 2.5 Flash
-                        </SelectItem>
-                      </>
-                    )}
-                    {type === 'video' && (
-                      <SelectItem value="kie-veo3">
-                        KIE Veo3 (8 seconds, 16:9)
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Prompt Input */}
-              <div className="space-y-2">
-                <Label htmlFor="prompt" className="text-white text-sm font-medium">
-                  Prompt
-                </Label>
+                    <span className="text-xs">ℹ️</span>
+                  </button>
+                </div>
                 <Textarea
                   id="prompt"
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Describe your vision in detail... (10-1000 characters)"
+                  placeholder="Example: A creator filming herself at home showing our collagen drink, explaining how it helps her skin glow and tastes amazing."
                   rows={4}
                   maxLength={1000}
                   className="bg-white/10 border-white/20 text-white placeholder:text-white/50 resize-none"
                 />
-                <div className="flex justify-between items-center">
-                  <p className="text-xs text-white/50">
-                    {prompt.length} / 1000 characters
+                <div className="flex justify-between items-start">
+                  <p className="text-xs text-white/50 max-w-[70%]">
+                    Describe the setting, action, and product details as if briefing a content creator
                   </p>
-                  {prompt.length < 10 && prompt.length > 0 && (
-                    <p className="text-xs text-red-400">
-                      Minimum 10 characters required
-                    </p>
-                  )}
+                  <p className="text-xs text-white/50">
+                    {prompt.length} / 1000
+                  </p>
                 </div>
+                {prompt.length < 10 && prompt.length > 0 && (
+                  <p className="text-xs text-red-400">
+                    Minimum 10 characters required
+                  </p>
+                )}
               </div>
 
-              {/* Reference Image URL (Optional) */}
+              {/* Product Image URL (Optional) */}
               <div className="space-y-2">
                 <Label htmlFor="referenceUrl" className="text-white text-sm font-medium">
-                  Reference Image URL (Optional)
+                  Product Image (Optional)
                 </Label>
                 <Input
                   id="referenceUrl"
                   type="url"
                   value={referenceImageUrl}
                   onChange={(e) => setReferenceImageUrl(e.target.value)}
-                  placeholder="https://example.com/image.jpg"
+                  placeholder="https://yourshopifyproduct.com/photo.jpg"
                   className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                 />
                 <p className="text-xs text-white/50">
-                  Provide a reference image to guide the AI generation (optional)
+                  Add a link to your product photo — AI will use it to match your brand
                 </p>
               </div>
 
               {/* Generate Button */}
-              <Button
-                type="submit"
-                className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium"
-                disabled={generateMutation.isPending || prompt.length < 10}
-              >
-                {generateMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-5 w-5 mr-2" />
-                    Generate {type === 'image' ? 'Image' : 'Video'}
-                  </>
-                )}
-              </Button>
+              <div className="space-y-2">
+                <Button
+                  type="submit"
+                  className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                  disabled={generateMutation.isPending || prompt.length < 10}
+                >
+                  {generateMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                      Creating Your Ad...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-5 w-5 mr-2" />
+                      Generate Ad {type === 'image' ? 'Image' : 'Video'}
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-white/60 text-center">
+                  Your ad will appear below once ready (usually within 1–2 minutes)
+                </p>
+              </div>
             </form>
           </CardContent>
         </Card>
 
+        {/* Divider */}
+        <div className="border-t border-white/10 mb-12"></div>
+
         {/* Gallery Section */}
         <div>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-semibold text-white">
-              Your Generations
+          <div className="mb-6">
+            <h2 className="text-2xl font-semibold text-white mb-2">
+              Your UGC Ads
             </h2>
-            {gallery?.total !== undefined && (
-              <span className="text-white/60 text-sm">
-                {gallery.total} {gallery.total === 1 ? 'item' : 'items'}
-              </span>
-            )}
+            <div className="flex items-center justify-between">
+              <p className="text-white/60 text-sm">
+                Preview and manage your generated UGC content. Click to caption, schedule, or post.
+              </p>
+              {gallery?.total !== undefined && (
+                <span className="text-white/60 text-sm font-medium">
+                  {gallery.total} {gallery.total === 1 ? 'ad' : 'ads'}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Loading State */}
@@ -341,10 +356,10 @@ export default function AIStudioPage() {
                 <Sparkles className="h-10 w-10 text-gray-400" />
               </div>
               <h3 className="text-xl font-medium text-white mb-2">
-                No generations yet
+                No UGC ads yet
               </h3>
               <p className="text-gray-400 mb-6">
-                Create your first AI-generated media using the form above
+                Create your first influencer-style ad using the form above
               </p>
             </div>
           )}

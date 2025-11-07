@@ -21,6 +21,7 @@ import {
   Calendar,
   Download,
   ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -86,9 +87,9 @@ export function MediaPreviewCard({ asset }: MediaPreviewCardProps) {
         {asset.status === 'processing' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <Loader2 className="h-8 w-8 text-white animate-spin mb-3" />
-            <p className="text-sm text-white/70 font-medium">Generating...</p>
+            <p className="text-sm text-white/70 font-medium">Creating Ad...</p>
             <p className="text-xs text-white/50 mt-1">
-              This may take a few minutes
+              Usually takes 1–2 minutes
             </p>
           </div>
         )}
@@ -129,9 +130,9 @@ export function MediaPreviewCard({ asset }: MediaPreviewCardProps) {
         {asset.status === 'error' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-500/10">
             <XCircle className="h-8 w-8 text-red-400 mb-3" />
-            <p className="text-sm text-red-300 font-medium mb-1">Generation Failed</p>
+            <p className="text-sm text-red-300 font-medium mb-1">Ad Generation Failed</p>
             <p className="text-xs text-red-300/80 px-4 text-center">
-              {asset.errorMessage || 'An error occurred during generation'}
+              {asset.errorMessage || 'Something went wrong. Try again with a different prompt.'}
             </p>
             {asset.retryCount > 0 && (
               <p className="text-xs text-red-300/60 mt-2">
@@ -148,34 +149,36 @@ export function MediaPreviewCard({ asset }: MediaPreviewCardProps) {
             className="bg-black/60 backdrop-blur-sm border-0 shadow-lg"
           >
             {asset.status === 'processing' && (
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              <>
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                Creating Ad...
+              </>
             )}
             {asset.status === 'ready' && (
-              <CheckCircle2 className="h-3 w-3 mr-1" />
+              <>
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                Ready to Review
+              </>
             )}
             {asset.status === 'error' && (
-              <XCircle className="h-3 w-3 mr-1" />
+              <>
+                <XCircle className="h-3 w-3 mr-1" />
+                Generation Failed
+              </>
             )}
-            {asset.status.charAt(0).toUpperCase() + asset.status.slice(1)}
           </Badge>
         </div>
 
-        {/* Type Badge (Top Left) */}
+        {/* Type Badge (Top Left) - Icon Only */}
         <div className="absolute top-3 left-3 z-10">
           <Badge
             variant="outline"
-            className="bg-black/60 backdrop-blur-sm border-white/20"
+            className="bg-black/60 backdrop-blur-sm border-white/20 px-2"
           >
             {asset.type === 'image' ? (
-              <>
-                <ImageIcon className="h-3 w-3 mr-1" />
-                Image
-              </>
+              <span className="text-base">📸</span>
             ) : (
-              <>
-                <VideoIcon className="h-3 w-3 mr-1" />
-                Video
-              </>
+              <span className="text-base">🎥</span>
             )}
           </Badge>
         </div>
@@ -201,6 +204,28 @@ export function MediaPreviewCard({ asset }: MediaPreviewCardProps) {
       {/* Actions (only show for ready state) */}
       {asset.status === 'ready' && asset.resultUrl && (
         <CardFooter className="p-4 pt-0 flex flex-wrap gap-2">
+          {/* Caption Button */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10"
+            title="Generate caption for this ad"
+          >
+            <Sparkles className="h-3 w-3 mr-1" />
+            Caption
+          </Button>
+
+          {/* Schedule Button */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10"
+            title="Schedule or post this ad"
+          >
+            <Calendar className="h-3 w-3 mr-1" />
+            Schedule
+          </Button>
+
           {/* Download Button */}
           <Button
             size="sm"
@@ -213,26 +238,10 @@ export function MediaPreviewCard({ asset }: MediaPreviewCardProps) {
               download
               target="_blank"
               rel="noopener noreferrer"
+              title="Download this ad"
             >
               <Download className="h-3 w-3 mr-1" />
               Download
-            </a>
-          </Button>
-
-          {/* Open in New Tab Button */}
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10"
-            asChild
-          >
-            <a
-              href={asset.resultUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <ExternalLink className="h-3 w-3 mr-1" />
-              View
             </a>
           </Button>
         </CardFooter>
