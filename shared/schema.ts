@@ -105,7 +105,10 @@ export const socialPosts = pgTable("social_posts", {
   // AI Caption Metadata (Phase 2)
   captionSource: text("caption_source"), // "manual", "ai_auto", "ai_manual"
   aiCaptionMetadata: jsonb("ai_caption_metadata"), // {model, tokensUsed, generatedAt, promptUsed}
-  status: text("status").notNull(), // posting, published, failed
+  // Scheduled Posting (Phase 3)
+  scheduledFor: timestamp("scheduled_for"), // UTC timestamp for scheduled posts
+  isScheduled: text("is_scheduled").default("false").notNull(), // "true" or "false"
+  status: text("status").notNull(), // draft, scheduled, posting, published, failed
   errorMessage: text("error_message"),
   lateResponse: jsonb("late_response"), // Full Late API response
   createdAt: timestamp("created_at").notNull().default(sql`now()`),

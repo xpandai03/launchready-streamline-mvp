@@ -976,7 +976,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { projectId, platform, caption } = validation.data;
+      const { projectId, platform, caption, scheduledFor } = validation.data;
 
       // Check usage limit (Phase 6: Free tier limits)
       const canCreatePost = await checkPostLimit(req.userId!);
@@ -1115,7 +1115,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('[Caption] User auto-generate setting:', user.captionAutoGenerate);
       }
 
-      // Create initial social post record
+      // Create initial social post record (Phase 3: Include scheduling fields)
+      const initialStatus = scheduledFor ? 'scheduled' : 'posting';
+
       const socialPost = await storage.createSocialPost({
         projectId,
         taskId: project.taskId,
@@ -1124,7 +1126,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         caption: finalCaption,
         captionSource,
         aiCaptionMetadata: aiMetadata,
-        status: 'posting',
+        status: initialStatus, // 'scheduled' if scheduledFor provided, otherwise 'posting'
+        scheduledFor: scheduledFor ? new Date(scheduledFor) : null, // Phase 3: Store scheduled time
+        isScheduled: scheduledFor ? 'true' : 'false', // Phase 3: Flag for scheduled posts
         latePostId: null,
         platformPostUrl: null,
         errorMessage: null,
@@ -1132,64 +1136,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
         publishedAt: null,
       });
 
-      console.log(`[Social Post] Created social post record: ${socialPost.id} (caption source: ${captionSource})`);
+      console.log(`[Social Post] Created social post record: ${socialPost.id} (caption source: ${captionSource}, scheduled: ${!!scheduledFor})`);
 
-      // Post to Instagram via Late API using user's profile
-      try {
-        const lateResponse = await lateService.postToInstagram(
-          {
-            videoUrl: projectExport.srcUrl,
-            caption: finalCaption,
-            contentType: 'reel',
-          },
-          user.lateProfileId,  // User's Late profile ID
-          accountId            // Instagram account ID
-        );
+      // Phase 3: Handle scheduled vs immediate posting
+      if (scheduledFor) {
+        // Scheduled post: Create in Late.dev with scheduledFor timestamp
+        console.log(`[Social Post] Scheduling post for ${scheduledFor} (UTC)`);
 
-        // Extract platform-specific data
-        const instagramPost = lateResponse.post.platforms.find(
-          (p) => p.platform === 'instagram'
-        );
+        try {
+          const lateResponse = await lateService.postToInstagram(
+            {
+              videoUrl: projectExport.srcUrl,
+              caption: finalCaption,
+              contentType: 'reel',
+              scheduledFor, // Pass ISO 8601 UTC timestamp to Late.dev
+            },
+            user.lateProfileId,  // User's Late profile ID
+            accountId            // Instagram account ID
+          );
 
-        const finalStatus = instagramPost?.status === 'published' ? 'published' :
-                           instagramPost?.status === 'failed' ? 'failed' : 'posting';
+          // Update social post with Late.dev response (scheduled status)
+          const updatedPost = await storage.updateSocialPost(socialPost.id, {
+            status: 'scheduled',
+            latePostId: lateResponse.post._id,
+            lateResponse: lateResponse as any,
+          });
 
-        // Update social post with success
-        const updatedPost = await storage.updateSocialPost(socialPost.id, {
-          status: finalStatus,
-          latePostId: lateResponse.post._id,
-          platformPostUrl: instagramPost?.platformPostUrl || null,
-          lateResponse: lateResponse as any,
-          publishedAt: finalStatus === 'published' ? new Date() : null,
-          errorMessage: instagramPost?.error || null,
-        });
+          console.log(`[Social Post] Successfully scheduled post in Late.dev: ${lateResponse.post._id}`);
 
-        console.log(`[Social Post] Successfully posted to Instagram: ${instagramPost?.platformPostUrl || 'pending'}`);
+          res.json({
+            success: true,
+            post: updatedPost,
+            message: `Post scheduled for ${new Date(scheduledFor).toLocaleString('en-US', { timeZone: 'UTC' })} UTC`,
+            scheduledFor,
+          });
+        } catch (lateError: any) {
+          // Update social post with failure
+          await storage.updateSocialPost(socialPost.id, {
+            status: 'failed',
+            errorMessage: lateError.message,
+          });
 
-        // Increment usage counter (Phase 6: Track social post creation)
-        await incrementPostUsage(req.userId!);
+          console.error("[Social Post] Late API scheduling error:", lateError);
+          res.status(500).json({
+            error: "Failed to schedule post",
+            details: lateError.message,
+          });
+        }
+      } else {
+        // Immediate post: Post to Instagram right away (existing behavior)
+        try {
+          const lateResponse = await lateService.postToInstagram(
+            {
+              videoUrl: projectExport.srcUrl,
+              caption: finalCaption,
+              contentType: 'reel',
+            },
+            user.lateProfileId,  // User's Late profile ID
+            accountId            // Instagram account ID
+          );
 
-        res.json({
-          success: true,
-          post: updatedPost,
-          platformUrl: instagramPost?.platformPostUrl,
-          message: finalStatus === 'published'
-            ? "Successfully posted to Instagram!"
-            : "Post is being processed by Instagram",
-        });
-      } catch (lateError: any) {
-        // Update social post with failure
-        await storage.updateSocialPost(socialPost.id, {
-          status: 'failed',
-          errorMessage: lateError.message,
-        });
+          // Extract platform-specific data
+          const instagramPost = lateResponse.post.platforms.find(
+            (p) => p.platform === 'instagram'
+          );
 
-        console.error("[Social Post] Late API error:", lateError);
-        res.status(500).json({
-          error: "Failed to post to Instagram",
-          details: lateError.message,
-        });
-      }
+          const finalStatus = instagramPost?.status === 'published' ? 'published' :
+                             instagramPost?.status === 'failed' ? 'failed' : 'posting';
+
+          // Update social post with success
+          const updatedPost = await storage.updateSocialPost(socialPost.id, {
+            status: finalStatus,
+            latePostId: lateResponse.post._id,
+            platformPostUrl: instagramPost?.platformPostUrl || null,
+            lateResponse: lateResponse as any,
+            publishedAt: finalStatus === 'published' ? new Date() : null,
+            errorMessage: instagramPost?.error || null,
+          });
+
+          console.log(`[Social Post] Successfully posted to Instagram: ${instagramPost?.platformPostUrl || 'pending'}`);
+
+          // Increment usage counter (Phase 6: Track social post creation)
+          await incrementPostUsage(req.userId!);
+
+          res.json({
+            success: true,
+            post: updatedPost,
+            platformUrl: instagramPost?.platformPostUrl,
+            message: finalStatus === 'published'
+              ? "Successfully posted to Instagram!"
+              : "Post is being processed by Instagram",
+          });
+        } catch (lateError: any) {
+          // Update social post with failure
+          await storage.updateSocialPost(socialPost.id, {
+            status: 'failed',
+            errorMessage: lateError.message,
+          });
+
+          console.error("[Social Post] Late API error:", lateError);
+          res.status(500).json({
+            error: "Failed to post to Instagram",
+            details: lateError.message,
+          });
+        }
+      } // End of if/else (scheduled vs immediate)
     } catch (error: any) {
       console.error("[Social Post] Error posting to social:", error);
       res.status(500).json({

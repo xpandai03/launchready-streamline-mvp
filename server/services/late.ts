@@ -21,6 +21,7 @@ export interface PostToInstagramParams {
   videoUrl: string;
   caption: string;
   contentType?: 'reel' | 'post' | 'story';
+  scheduledFor?: string; // ISO 8601 UTC timestamp for scheduled posts (optional)
 }
 
 /**
@@ -151,6 +152,30 @@ export const lateService = {
     // Use provided accountId or fall back to hardcoded default
     const instagramAccountId = accountId || INSTAGRAM_ACCOUNT_ID;
 
+    // Validate scheduled timestamp if provided (Phase 3)
+    if (params.scheduledFor) {
+      const scheduledDate = new Date(params.scheduledFor);
+      const now = new Date();
+      const oneYearFromNow = new Date();
+      oneYearFromNow.setFullYear(now.getFullYear() + 1);
+
+      // Reject if scheduled time is in the past
+      if (scheduledDate <= now) {
+        throw new Error('Scheduled time must be in the future');
+      }
+
+      // Reject if scheduled more than 1 year ahead
+      if (scheduledDate > oneYearFromNow) {
+        throw new Error('Cannot schedule posts more than 1 year in advance');
+      }
+
+      console.log('[Late Service] Scheduling post for:', {
+        scheduledFor: params.scheduledFor,
+        scheduledDate: scheduledDate.toISOString(),
+        minutesFromNow: Math.round((scheduledDate.getTime() - now.getTime()) / (1000 * 60)),
+      });
+    }
+
     console.log('[Late Service] Posting to Instagram:', {
       videoUrl: params.videoUrl.substring(0, 50) + '...',
       caption: params.caption,
@@ -158,8 +183,11 @@ export const lateService = {
       contentType: params.contentType || 'reel',
       profileId: profileId || 'default',
       accountId: instagramAccountId,
+      isScheduled: !!params.scheduledFor,
+      scheduledFor: params.scheduledFor || 'immediate',
     });
 
+    // Construct request body with conditional scheduling (Phase 3)
     const requestBody = {
       content: params.caption,
       ...(profileId && { profileId }), // Include profileId if provided
@@ -178,7 +206,17 @@ export const lateService = {
           url: params.videoUrl,
         },
       ],
-      publishNow: true, // Post immediately, not scheduled
+      // Conditional scheduling: if scheduledFor is provided, use Late.dev's scheduling
+      ...(params.scheduledFor
+        ? {
+            publishNow: false, // Don't publish immediately
+            scheduledFor: params.scheduledFor, // ISO 8601 UTC timestamp
+            timezone: 'UTC', // Always use UTC for consistency
+          }
+        : {
+            publishNow: true, // Publish immediately (default behavior)
+          }
+      ),
     };
 
     console.log('[Late Service] Request body:', JSON.stringify(requestBody, null, 2));

@@ -13,6 +13,7 @@ import { z } from "zod";
  * - projectId: Must be a non-empty string
  * - platform: Currently only 'instagram' supported
  * - caption: Optional, max 2200 characters (Instagram limit)
+ * - scheduledFor: Optional ISO 8601 UTC timestamp for scheduled posts (Phase 3)
  */
 export const postToSocialSchema = z.object({
   projectId: z
@@ -31,6 +32,12 @@ export const postToSocialSchema = z.object({
     .max(2200, "Instagram caption limit is 2200 characters")
     .optional()
     .default(""),
+
+  // Phase 3: Scheduled posting support
+  scheduledFor: z
+    .string()
+    .datetime({ message: "scheduledFor must be a valid ISO 8601 UTC timestamp" })
+    .optional(),
 });
 
 /**

@@ -13,7 +13,9 @@ import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
-import { CheckCircle2, XCircle, Loader2, ExternalLink, Sparkles } from 'lucide-react';
+import { Checkbox } from './ui/checkbox';
+import { Input } from './ui/input';
+import { CheckCircle2, XCircle, Loader2, ExternalLink, Sparkles, Calendar } from 'lucide-react';
 
 interface PostClipModalProps {
   isOpen: boolean;
@@ -29,6 +31,8 @@ export function PostClipModal({
   exportUrl
 }: PostClipModalProps) {
   const [caption, setCaption] = useState('');
+  const [isScheduled, setIsScheduled] = useState(false); // Phase 3: Scheduling toggle
+  const [scheduledDateTime, setScheduledDateTime] = useState(''); // Phase 3: ISO datetime-local input
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -67,10 +71,20 @@ export function PostClipModal({
 
   const postMutation = useMutation({
     mutationFn: async () => {
+      // Phase 3: Convert local datetime to UTC ISO 8601 if scheduled
+      let scheduledForUTC: string | undefined = undefined;
+
+      if (isScheduled && scheduledDateTime) {
+        // Parse local datetime and convert to UTC ISO 8601
+        const localDate = new Date(scheduledDateTime);
+        scheduledForUTC = localDate.toISOString();
+      }
+
       const response = await apiRequest('POST', '/api/social/post', {
         projectId,
         platform: 'instagram',
         caption,
+        ...(scheduledForUTC && { scheduledFor: scheduledForUTC }), // Include only if scheduled
       });
 
       return await response.json();
@@ -91,6 +105,8 @@ export function PostClipModal({
   const handleClose = () => {
     if (!postMutation.isPending) {
       setCaption('');
+      setIsScheduled(false); // Phase 3: Reset scheduling state
+      setScheduledDateTime(''); // Phase 3: Reset datetime
       postMutation.reset();
       onClose();
     }
@@ -149,6 +165,48 @@ export function PostClipModal({
                 </p>
               </div>
 
+              {/* Phase 3: Scheduled Posting UI */}
+              <div className="space-y-3 border-t pt-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="schedule-post"
+                    checked={isScheduled}
+                    onCheckedChange={(checked) => setIsScheduled(checked === true)}
+                    disabled={postMutation.isPending || generateMutation.isPending}
+                    aria-label="Schedule post for later"
+                  />
+                  <Label
+                    htmlFor="schedule-post"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex items-center gap-2"
+                  >
+                    <Calendar className="h-4 w-4" aria-hidden="true" />
+                    Schedule post for later
+                  </Label>
+                </div>
+
+                {isScheduled && (
+                  <div className="space-y-2 pl-6">
+                    <Label htmlFor="scheduled-datetime" className="text-sm">
+                      Select date and time
+                    </Label>
+                    <Input
+                      id="scheduled-datetime"
+                      type="datetime-local"
+                      value={scheduledDateTime}
+                      onChange={(e) => setScheduledDateTime(e.target.value)}
+                      min={new Date().toISOString().slice(0, 16)} // Prevent past dates
+                      disabled={postMutation.isPending || generateMutation.isPending}
+                      className="w-full"
+                      aria-label="Select scheduled date and time"
+                      aria-describedby="schedule-help"
+                    />
+                    <p id="schedule-help" className="text-xs text-muted-foreground">
+                      Your post will be published at this time (converts to UTC automatically)
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-2">
                 <Button
                   onClick={handleClose}
@@ -160,18 +218,25 @@ export function PostClipModal({
                 </Button>
                 <Button
                   onClick={handlePost}
-                  disabled={postMutation.isPending || !exportUrl}
+                  disabled={
+                    postMutation.isPending ||
+                    !exportUrl ||
+                    (isScheduled && !scheduledDateTime) // Phase 3: Disable if scheduled but no datetime
+                  }
                   className="flex-1"
-                  aria-label="Post clip to Instagram as a Reel"
+                  aria-label={isScheduled ? 'Schedule post to Instagram' : 'Post clip to Instagram as a Reel'}
                   aria-busy={postMutation.isPending}
                 >
                   {postMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                      Posting...
+                      {isScheduled ? 'Scheduling...' : 'Posting...'}
                     </>
                   ) : (
-                    'Post to Instagram'
+                    <>
+                      {isScheduled && <Calendar className="mr-2 h-4 w-4" aria-hidden="true" />}
+                      {isScheduled ? 'Schedule Post' : 'Post Now'}
+                    </>
                   )}
                 </Button>
               </div>
@@ -182,11 +247,16 @@ export function PostClipModal({
             <Alert className="border-green-500 bg-green-50 dark:bg-green-900/20" role="status" aria-live="polite">
               <CheckCircle2 className="h-4 w-4 text-green-600" aria-hidden="true" />
               <AlertDescription className="space-y-2">
+                {/* Phase 3: Different messages for scheduled vs immediate posts */}
                 <p className="font-semibold text-green-900 dark:text-green-100">
-                  Successfully posted to Instagram!
+                  {postMutation.data.scheduledFor
+                    ? 'Post scheduled successfully! ⏰'
+                    : 'Successfully posted to Instagram!'}
                 </p>
                 <p className="text-sm text-green-800 dark:text-green-200">
-                  Your Reel has been published and should appear on Instagram shortly.
+                  {postMutation.data.scheduledFor
+                    ? `Your Reel will be published at ${new Date(postMutation.data.scheduledFor).toLocaleString()}`
+                    : 'Your Reel has been published and should appear on Instagram shortly.'}
                 </p>
                 {postMutation.data.platformUrl && (
                   <Button
