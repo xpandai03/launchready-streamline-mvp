@@ -1069,8 +1069,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let aiMetadata: any = null;
 
       // Auto-generate caption if empty and user has auto-generate enabled
-      if (!finalCaption && user.captionAutoGenerate === 'true') {
+      // Type-safe check: handles both boolean true and string 'true'
+      const autoGenerateEnabled = user.captionAutoGenerate === true || user.captionAutoGenerate === 'true';
+
+      if (!finalCaption && autoGenerateEnabled) {
         console.log('[Caption] Auto-generating caption (empty caption + auto-mode enabled)');
+        console.log('[Caption] User auto-generate setting:', user.captionAutoGenerate, '(type:', typeof user.captionAutoGenerate, ')');
 
         try {
           const { openaiService } = await import("./services/openai.js");
@@ -1079,20 +1083,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userSystemPrompt: user.captionSystemPrompt || undefined,
           });
 
-          finalCaption = result.caption;
-          captionSource = 'ai_auto';
-          aiMetadata = result.metadata;
+          // Validate generated caption is not empty
+          if (result.caption && result.caption.trim().length > 0) {
+            finalCaption = result.caption.trim();
+            captionSource = 'ai_auto';
+            aiMetadata = result.metadata;
 
-          console.log(`[Caption] Auto-generated caption: "${finalCaption.substring(0, 50)}..."`);
+            console.log(`[Caption] Auto-generated caption: "${finalCaption.substring(0, 50)}..."`);
+            console.log('[Caption] Generated caption length:', finalCaption.length);
+          } else {
+            // OpenAI returned empty caption - use fallback
+            console.warn('[Caption] OpenAI returned empty caption, using fallback');
+            finalCaption = "Check out my latest clip! 🎥✨";
+            captionSource = 'ai_auto';
+            aiMetadata = { ...result.metadata, fallback: true };
+            console.log('[Caption] Using fallback caption, length:', finalCaption.length);
+          }
         } catch (captionError: any) {
-          // Graceful fallback: if caption generation fails, continue with empty caption
-          console.error('[Caption] Failed to auto-generate caption, continuing with empty:', captionError.message);
-          // captionSource remains 'manual', aiMetadata remains null
+          // Graceful fallback: if caption generation fails, use default caption
+          console.error('[Caption] Failed to auto-generate caption, using fallback:', captionError.message);
+          finalCaption = "Check out my latest clip! 🎥✨";
+          captionSource = 'manual'; // Mark as manual since AI failed
+          aiMetadata = null;
+          console.log('[Caption] Error fallback caption length:', finalCaption.length);
         }
       } else if (finalCaption) {
         console.log('[Caption] Using manual caption provided by user');
+        console.log('[Caption] Manual caption length:', finalCaption.length);
       } else {
-        console.log('[Caption] No caption (auto-generate disabled or failed)');
+        console.log('[Caption] No caption (auto-generate disabled)');
+        console.log('[Caption] User auto-generate setting:', user.captionAutoGenerate);
       }
 
       // Create initial social post record

@@ -134,9 +134,14 @@ export const openaiService = {
       // Extract caption from response
       const caption = data.choices?.[0]?.message?.content?.trim();
 
-      if (!caption) {
-        console.error('[OpenAI Service] No caption in response:', data);
-        throw new Error('OpenAI API returned no caption content');
+      if (!caption || caption.length === 0) {
+        console.error('[OpenAI Service] No caption in response or empty caption:', data);
+        throw new Error('OpenAI API returned no caption content or empty caption');
+      }
+
+      // Validate caption is reasonable length (at least 10 characters)
+      if (caption.length < 10) {
+        console.warn('[OpenAI Service] Caption too short, may be incomplete:', caption);
       }
 
       const result: CaptionGenerationResult = {
@@ -153,6 +158,7 @@ export const openaiService = {
         captionLength: caption.length,
         tokensUsed: result.metadata.tokensUsed,
         model: result.metadata.model,
+        captionPreview: caption.substring(0, 60) + '...',
       });
 
       return result;
