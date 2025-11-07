@@ -374,7 +374,10 @@ export default function AIStudioPage() {
                 <MediaPreviewCard
                   key={asset.id}
                   asset={asset}
-                  onClick={() => setSelectedAsset(asset)}
+                  onClick={() => {
+                    console.log('[AIStudio] Card clicked, setting selectedAsset:', asset.id);
+                    setSelectedAsset(asset);
+                  }}
                 />
               ))}
             </div>
@@ -382,19 +385,14 @@ export default function AIStudioPage() {
         </div>
       </div>
 
-      {/* UGC Ad Preview Modal with Error Boundary */}
-      <ErrorBoundary
-        fallback={
-          <div className="p-6 text-center text-sm text-white/50">
-            Preview failed to load.
-          </div>
-        }
-      >
-        <UGCAdPreviewModal
-          asset={selectedAsset}
-          onClose={() => setSelectedAsset(null)}
-        />
-      </ErrorBoundary>
+      {/* UGC Ad Preview Modal */}
+      <UGCAdPreviewModal
+        asset={selectedAsset}
+        onClose={() => {
+          console.log('[AIStudio] Closing modal');
+          setSelectedAsset(null);
+        }}
+      />
 
       {/* Usage Limit Dialog */}
       <LimitReachedDialog

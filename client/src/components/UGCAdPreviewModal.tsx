@@ -69,6 +69,8 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  console.log('[UGC Modal] Rendered with asset:', asset ? asset.id : 'null');
+
   // Early return if no asset
   if (!asset) return null;
 
@@ -193,10 +195,12 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
     }
   };
 
+  console.log('[UGC Modal] Rendering Dialog with open:', !!asset, 'mediaUrl:', mediaUrl);
+
   return (
     <Dialog open={!!asset} onOpenChange={handleClose}>
       <DialogContent
-        className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#0B0B0B] border-white/20 text-white"
+        className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#0B0B0B] border-white/20 text-white z-[9999]"
         aria-describedby="ugc-ad-preview-description"
       >
         <DialogHeader className="border-b border-white/10 pb-4">
