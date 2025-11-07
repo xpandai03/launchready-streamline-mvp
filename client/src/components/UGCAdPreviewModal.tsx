@@ -82,16 +82,21 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
     if (!asset) return '';
 
     try {
-      return (
+      const url = (
         asset?.resultUrl ||
         (asset as any)?.result_url ||
+        asset?.metadata?.response?.resultUrls?.[0] || // ✅ Primary KIE path
         asset?.resultUrls?.[0] ||
         asset?.metadata?.resultUrls?.[0] ||
         asset?.metadata?.outputs?.[0]?.url ||
         asset?.metadata?.resultUrl ||
+        asset?.metadata?.resources?.[0]?.url ||
         asset?.apiResponse?.data?.resultUrl ||
         ''
       );
+
+      console.log('[UGC Modal] Extracted mediaUrl:', url, 'from asset:', asset.id);
+      return url;
     } catch (error) {
       console.error('[UGC Modal] Error extracting media URL:', error);
       setError(true);
@@ -210,6 +215,35 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
     setError(true);
   };
 
+  const handlePostToInstagram = async () => {
+    if (!mediaUrl || !asset) return;
+
+    try {
+      console.log('[UGC Modal] Posting asset to Instagram:', asset.id);
+      const response = await apiRequest('POST', '/api/social/post', {
+        videoUrl: mediaUrl,
+        platform: 'instagram',
+        caption: '',
+      });
+
+      const data = await response.json();
+
+      toast({
+        title: 'Posted successfully! 🎉',
+        description: 'Your ad was sent to Instagram via Late.dev.',
+      });
+
+      handleClose();
+    } catch (err: any) {
+      console.error('[UGC Modal] Failed to post:', err);
+      toast({
+        title: 'Failed to post',
+        description: err.message || 'Please try again',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // ========================================
   // CONDITIONAL RENDERING (AFTER ALL HOOKS)
   // ========================================
@@ -300,50 +334,52 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
 
           {/* Actions - Only show for ready status with valid URL */}
           {asset.status === 'ready' && !showPostFlow && mediaUrl && !error && (
-            <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
-              {/* Use for Video (only for images) */}
-              {asset.type === 'image' && (
-                <Button
-                  onClick={handleUseForVideo}
-                  disabled={useForVideoMutation.isPending}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700"
-                >
-                  {useForVideoMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <VideoIcon className="h-4 w-4 mr-2" />
-                      Use for Video
-                    </>
-                  )}
-                </Button>
-              )}
+            <div className="space-y-3 border-t border-white/10 pt-4">
+              {/* Primary Actions Row */}
+              <div className="flex flex-wrap gap-2">
+                {/* Use for Video (only for images) */}
+                {asset.type === 'image' && (
+                  <Button
+                    onClick={handleUseForVideo}
+                    disabled={useForVideoMutation.isPending}
+                    className="flex-1 bg-purple-600 hover:bg-purple-700"
+                  >
+                    {useForVideoMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <VideoIcon className="h-4 w-4 mr-2" />
+                        Use for Video
+                      </>
+                    )}
+                  </Button>
+                )}
 
-              {/* Post/Schedule (only for videos) */}
-              {asset.type === 'video' && (
+                {/* Post to Instagram */}
                 <Button
-                  onClick={handleShowPostFlow}
+                  onClick={handlePostToInstagram}
+                  disabled={!mediaUrl}
                   className="flex-1 bg-blue-600 hover:bg-blue-700"
                 >
                   <Calendar className="h-4 w-4 mr-2" />
-                  Post / Schedule
+                  Post to Instagram
                 </Button>
-              )}
 
-              {/* Download */}
-              <Button
-                asChild
-                variant="outline"
-                className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10"
-              >
-                <a href={mediaUrl} download target="_blank" rel="noopener noreferrer">
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </a>
-              </Button>
+                {/* Download */}
+                <Button
+                  asChild
+                  variant="outline"
+                  className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10"
+                >
+                  <a href={mediaUrl} download target="_blank" rel="noopener noreferrer">
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </a>
+                </Button>
+              </div>
             </div>
           )}
 
