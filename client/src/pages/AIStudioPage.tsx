@@ -34,6 +34,7 @@ import {
 import { MediaPreviewCard } from "@/components/MediaPreviewCard";
 import { LimitReachedDialog } from "@/components/LimitReachedDialog";
 import { UGCAdPreviewModal } from "@/components/UGCAdPreviewModal";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { formatDistanceToNow } from "date-fns";
 
 // TypeScript interfaces
@@ -381,11 +382,19 @@ export default function AIStudioPage() {
         </div>
       </div>
 
-      {/* UGC Ad Preview Modal */}
-      <UGCAdPreviewModal
-        asset={selectedAsset}
-        onClose={() => setSelectedAsset(null)}
-      />
+      {/* UGC Ad Preview Modal with Error Boundary */}
+      <ErrorBoundary
+        fallback={
+          <div className="p-6 text-center text-sm text-white/50">
+            Preview failed to load.
+          </div>
+        }
+      >
+        <UGCAdPreviewModal
+          asset={selectedAsset}
+          onClose={() => setSelectedAsset(null)}
+        />
+      </ErrorBoundary>
 
       {/* Usage Limit Dialog */}
       <LimitReachedDialog

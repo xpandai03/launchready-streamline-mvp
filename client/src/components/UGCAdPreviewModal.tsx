@@ -1,10 +1,11 @@
 /**
- * UGC Ad Preview Modal - Phase 4.6
+ * UGC Ad Preview Modal - Phase 4.6.2 (Fixed)
  *
- * Full-screen modal for viewing and acting on AI-generated UGC ads
- * - Displays image or video preview
+ * Proper overlay modal for viewing and acting on AI-generated UGC ads
+ * - Fixed: Modal now appears as overlay, not full page
+ * - Fixed: Crash protection for missing/undefined URLs
+ * - Displays image or video preview with fallback
  * - Actions: Use for Video, Post, Schedule, Download
- * - Integrates with existing posting and scheduling flows
  */
 
 import { useState } from 'react';
@@ -25,7 +26,6 @@ import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
 import { Alert, AlertDescription } from './ui/alert';
 import {
-  Sparkles,
   Calendar,
   Download,
   Video as VideoIcon,
@@ -69,23 +69,41 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Early return if no asset
   if (!asset) return null;
 
-  // Robust URL extraction
-  const getMediaUrl = (): string | null => {
-    return (
-      asset.resultUrl ||
-      (asset as any).result_url ||
-      asset.resultUrls?.[0] ||
-      asset.metadata?.resultUrls?.[0] ||
-      asset.metadata?.outputs?.[0]?.url ||
-      asset.metadata?.resultUrl ||
-      asset.apiResponse?.data?.resultUrl ||
-      null
-    );
+  // Robust URL extraction with crash protection
+  const getMediaUrl = (): string => {
+    try {
+      return (
+        asset?.resultUrl ||
+        (asset as any)?.result_url ||
+        asset?.resultUrls?.[0] ||
+        asset?.metadata?.resultUrls?.[0] ||
+        asset?.metadata?.outputs?.[0]?.url ||
+        asset?.metadata?.resultUrl ||
+        asset?.apiResponse?.data?.resultUrl ||
+        ''
+      );
+    } catch (error) {
+      console.error('[UGC Modal] Error extracting media URL:', error);
+      return '';
+    }
   };
 
   const mediaUrl = getMediaUrl();
+
+  // Format provider name safely
+  const formatProviderName = (provider?: string) => {
+    if (!provider) return 'Unknown Provider';
+    const providerNames: Record<string, string> = {
+      'kie-veo3': 'KIE Veo3',
+      'kie-4o-image': 'KIE 4O Image',
+      'kie-flux-kontext': 'KIE Flux Kontext',
+      'gemini-flash': 'Gemini Flash',
+    };
+    return providerNames[provider] || provider;
+  };
 
   // Use for Video mutation (image → video)
   const useForVideoMutation = useMutation({
@@ -95,13 +113,13 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
       });
       return await response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/ai/media'] });
       toast({
         title: 'Video generation started! 🎬',
         description: 'Check the gallery for your new video (usually 1-2 minutes).',
       });
-      onClose();
+      handleClose();
     },
     onError: (error: any) => {
       toast({
@@ -140,7 +158,7 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
           : 'Your UGC ad is now live on Instagram!',
       });
       setShowPostFlow(false);
-      onClose();
+      handleClose();
     },
     onError: (error: any) => {
       toast({
@@ -175,72 +193,86 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
     }
   };
 
-  const formatProviderName = (provider: string) => {
-    const providerNames: Record<string, string> = {
-      'kie-veo3': 'KIE Veo3',
-      'kie-4o-image': 'KIE 4O Image',
-      'kie-flux-kontext': 'KIE Flux Kontext',
-      'gemini-flash': 'Gemini Flash',
-    };
-    return providerNames[provider] || provider;
-  };
-
   return (
     <Dialog open={!!asset} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-black/95 backdrop-blur-md border-white/20 text-white">
+      <DialogContent
+        className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#0B0B0B] border-white/20 text-white"
+        aria-describedby="ugc-ad-preview-description"
+      >
         <DialogHeader className="border-b border-white/10 pb-4">
           <DialogTitle className="text-xl font-semibold">
             {asset.type === 'image' ? '📸 UGC Ad Image' : '🎬 UGC Ad Video'}
           </DialogTitle>
-          <DialogDescription className="text-white/70">
+          <DialogDescription id="ugc-ad-preview-description" className="text-white/70">
             <div className="flex items-center gap-2 text-sm mt-2">
               <span>{formatProviderName(asset.provider)}</span>
               <span>•</span>
-              <span>{formatDistanceToNow(new Date(asset.createdAt), { addSuffix: true })}</span>
+              <span>
+                {asset.createdAt
+                  ? formatDistanceToNow(new Date(asset.createdAt), { addSuffix: true })
+                  : 'Recently created'}
+              </span>
             </div>
           </DialogDescription>
         </DialogHeader>
 
         {/* Preview Section */}
         <div className="space-y-4">
-          {/* Media Preview */}
-          <div className="flex justify-center items-center bg-black/40 rounded-lg p-6">
-            {asset.type === 'image' && mediaUrl ? (
-              <img
-                src={mediaUrl}
-                alt={asset.prompt}
-                className="max-h-[500px] rounded-lg shadow-xl object-contain"
-              />
-            ) : asset.type === 'video' && mediaUrl ? (
-              <video
-                src={mediaUrl}
-                controls
-                className="max-h-[500px] rounded-lg shadow-xl"
-                preload="metadata"
-              >
-                Your browser does not support the video tag.
-              </video>
+          {/* Media Preview with crash protection */}
+          <div className="flex justify-center items-center bg-black/40 rounded-lg p-6 min-h-[300px]">
+            {mediaUrl ? (
+              asset.type === 'video' ? (
+                <video
+                  src={mediaUrl}
+                  controls
+                  className="max-h-[500px] rounded-lg shadow-xl"
+                  preload="metadata"
+                  onError={(e) => {
+                    console.error('[UGC Modal] Video load error:', e);
+                  }}
+                >
+                  Your browser does not support the video tag.
+                </video>
+              ) : (
+                <img
+                  src={mediaUrl}
+                  alt={asset.prompt || 'UGC Ad'}
+                  className="max-h-[500px] rounded-lg shadow-xl object-contain"
+                  onError={(e) => {
+                    console.error('[UGC Modal] Image load error:', e);
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              )
             ) : (
               <div className="flex flex-col items-center justify-center py-12">
                 <ImageIcon className="h-12 w-12 text-white/30 mb-3" />
-                <p className="text-white/50">Media preview unavailable</p>
+                <p className="text-sm text-white/50 text-center max-w-md">
+                  {asset.status === 'processing'
+                    ? 'This ad is still being generated. Preview will be available once complete.'
+                    : asset.status === 'error'
+                    ? 'Generation failed. No preview available.'
+                    : 'No preview available for this generation.'}
+                </p>
               </div>
             )}
           </div>
 
           {/* Prompt */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-white/90">Original Prompt</Label>
-            <p className="text-sm text-white/70 bg-white/5 border border-white/10 rounded-lg p-3">
-              {asset.prompt}
-            </p>
-          </div>
+          {asset.prompt && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-white/90">Original Prompt</Label>
+              <p className="text-sm text-white/70 bg-white/5 border border-white/10 rounded-lg p-3">
+                {asset.prompt}
+              </p>
+            </div>
+          )}
 
-          {/* Actions */}
-          {!showPostFlow && (
+          {/* Actions - Only show for ready status with valid URL */}
+          {asset.status === 'ready' && !showPostFlow && mediaUrl && (
             <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
               {/* Use for Video (only for images) */}
-              {asset.type === 'image' && mediaUrl && (
+              {asset.type === 'image' && (
                 <Button
                   onClick={handleUseForVideo}
                   disabled={useForVideoMutation.isPending}
@@ -260,8 +292,8 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
                 </Button>
               )}
 
-              {/* Post/Schedule (only for videos with URL) */}
-              {asset.type === 'video' && mediaUrl && (
+              {/* Post/Schedule (only for videos) */}
+              {asset.type === 'video' && (
                 <Button
                   onClick={handleShowPostFlow}
                   className="flex-1 bg-blue-600 hover:bg-blue-700"
@@ -272,18 +304,16 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
               )}
 
               {/* Download */}
-              {mediaUrl && (
-                <Button
-                  asChild
-                  variant="outline"
-                  className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10"
-                >
-                  <a href={mediaUrl} download target="_blank" rel="noopener noreferrer">
-                    <Download className="h-4 w-4 mr-2" />
-                    Download
-                  </a>
-                </Button>
-              )}
+              <Button
+                asChild
+                variant="outline"
+                className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10"
+              >
+                <a href={mediaUrl} download target="_blank" rel="noopener noreferrer">
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
+                </a>
+              </Button>
             </div>
           )}
 
@@ -294,11 +324,9 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
                 <>
                   {/* Caption */}
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="caption" className="text-sm font-medium">
-                        Caption (optional)
-                      </Label>
-                    </div>
+                    <Label htmlFor="caption" className="text-sm font-medium">
+                      Caption (optional)
+                    </Label>
                     <Textarea
                       id="caption"
                       placeholder="Add a caption for your post..."
