@@ -1470,6 +1470,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * POST /api/ai/media/use-for-video
+   *
+   * Convert an existing image asset to video generation
+   * Takes an image from the gallery and generates a video using it as reference
+   */
+  app.post("/api/ai/media/use-for-video", requireAuth, async (req, res) => {
+    try {
+      const { sourceAssetId } = req.body;
+
+      if (!sourceAssetId) {
+        return res.status(400).json({ error: "sourceAssetId is required" });
+      }
+
+      // Fetch source asset
+      const source = await storage.getMediaAsset(sourceAssetId);
+      if (!source) {
+        return res.status(404).json({ error: "Source asset not found" });
+      }
+
+      // Verify ownership
+      if (source.userId !== req.userId) {
+        return res.status(404).json({ error: "Source asset not found" });
+      }
+
+      // Ensure source is an image
+      if (source.type !== 'image') {
+        return res.status(400).json({ error: "Source must be an image asset" });
+      }
+
+      // Ensure source has a result URL
+      const sourceUrl = source.resultUrl || (source as any).result_url;
+      if (!sourceUrl) {
+        return res.status(400).json({ error: "Source image has no result URL" });
+      }
+
+      // Check usage limit
+      const canGenerate = await checkMediaGenerationLimit(req.userId!);
+      if (!canGenerate) {
+        return res.status(403).json({
+          error: 'Monthly media generation limit reached',
+          message: 'Free plan allows 10 AI generations per month. Upgrade to Pro for unlimited.',
+          limit: FREE_MEDIA_GENERATION_LIMIT,
+        });
+      }
+
+      console.log(`[AI Use For Video] Converting image ${sourceAssetId} to video for user ${req.userId}`);
+
+      // Create enhanced prompt based on original image prompt
+      const videoPrompt = source.prompt
+        ? `${source.prompt}. Create a dynamic 8-second UGC-style video showcasing this product.`
+        : `Create an engaging 8-second UGC-style product video based on this image.`;
+
+      // Create new media asset record
+      const assetId = uuidv4();
+      await storage.createMediaAsset({
+        id: assetId,
+        userId: req.userId!,
+        provider: 'kie-veo3',
+        type: 'video',
+        prompt: videoPrompt,
+        referenceImageUrl: sourceUrl,
+        status: 'processing',
+        taskId: null,
+        resultUrl: null,
+        resultUrls: null,
+        errorMessage: null,
+        retryCount: 0,
+        metadata: { sourceAssetId },
+        apiResponse: null,
+      });
+
+      // Start video generation (background process will handle polling)
+      processMediaGeneration(assetId).catch((err) => {
+        console.error(`[AI Use For Video] Background generation failed for ${assetId}:`, err);
+      });
+
+      res.json({
+        success: true,
+        newAssetId: assetId,
+        status: 'processing',
+        message: 'Video generation started from image',
+      });
+
+    } catch (error: any) {
+      console.error("[AI Use For Video] Error:", error);
+      res.status(500).json({
+        error: "Failed to start video generation",
+        details: error.message,
+      });
+    }
+  });
+
   // ========================================
   // BACKGROUND PROCESSING: Media Generation (Phase 4)
   // ========================================

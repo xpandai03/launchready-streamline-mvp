@@ -9,19 +9,13 @@
  */
 
 import { useState } from "react";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Loader2,
   CheckCircle2,
   XCircle,
   Image as ImageIcon,
-  Video as VideoIcon,
-  Calendar,
-  Download,
-  ExternalLink,
-  Sparkles,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -48,9 +42,10 @@ interface MediaAsset {
 
 interface MediaPreviewCardProps {
   asset: MediaAsset;
+  onClick?: () => void;
 }
 
-export function MediaPreviewCard({ asset }: MediaPreviewCardProps) {
+export function MediaPreviewCard({ asset, onClick }: MediaPreviewCardProps) {
   const [showPostModal, setShowPostModal] = useState(false);
   const [imageError, setImageError] = useState(false);
 
@@ -96,7 +91,10 @@ export function MediaPreviewCard({ asset }: MediaPreviewCardProps) {
   };
 
   return (
-    <Card className="bg-white/5 backdrop-blur-md border border-white/10 overflow-hidden hover:bg-white/10 transition-all">
+    <Card
+      className="bg-white/5 backdrop-blur-md border border-white/10 overflow-hidden hover:bg-white/10 transition-all cursor-pointer"
+      onClick={onClick}
+    >
       {/* Media Preview Section */}
       <div className="relative aspect-video bg-black/20">
         {/* Processing State */}
@@ -217,50 +215,13 @@ export function MediaPreviewCard({ asset }: MediaPreviewCardProps) {
         </div>
       </CardContent>
 
-      {/* Actions (only show for ready state) */}
+      {/* Click hint for ready assets */}
       {asset.status === 'ready' && mediaUrl && (
-        <CardFooter className="p-4 pt-0 flex flex-wrap gap-2">
-          {/* Caption Button */}
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10"
-            title="Generate caption for this ad"
-          >
-            <Sparkles className="h-3 w-3 mr-1" />
-            Caption
-          </Button>
-
-          {/* Schedule Button */}
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10"
-            title="Schedule or post this ad"
-          >
-            <Calendar className="h-3 w-3 mr-1" />
-            Schedule
-          </Button>
-
-          {/* Download Button */}
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10"
-            asChild
-          >
-            <a
-              href={mediaUrl}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Download this ad"
-            >
-              <Download className="h-3 w-3 mr-1" />
-              Download
-            </a>
-          </Button>
-        </CardFooter>
+        <div className="px-4 pb-4 pt-2">
+          <p className="text-xs text-white/40 text-center hover:text-white/60 transition-colors">
+            Click to view, post, or download
+          </p>
+        </div>
       )}
     </Card>
   );

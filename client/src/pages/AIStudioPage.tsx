@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { MediaPreviewCard } from "@/components/MediaPreviewCard";
 import { LimitReachedDialog } from "@/components/LimitReachedDialog";
+import { UGCAdPreviewModal } from "@/components/UGCAdPreviewModal";
 import { formatDistanceToNow } from "date-fns";
 
 // TypeScript interfaces
@@ -75,6 +76,7 @@ export default function AIStudioPage() {
   const [type, setType] = useState<'image' | 'video'>('image');
   const [referenceImageUrl, setReferenceImageUrl] = useState("");
   const [showLimitDialog, setShowLimitDialog] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -368,12 +370,22 @@ export default function AIStudioPage() {
           {!isLoading && sortedAssets && sortedAssets.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sortedAssets.map((asset) => (
-                <MediaPreviewCard key={asset.id} asset={asset} />
+                <MediaPreviewCard
+                  key={asset.id}
+                  asset={asset}
+                  onClick={() => setSelectedAsset(asset)}
+                />
               ))}
             </div>
           )}
         </div>
       </div>
+
+      {/* UGC Ad Preview Modal */}
+      <UGCAdPreviewModal
+        asset={selectedAsset}
+        onClose={() => setSelectedAsset(null)}
+      />
 
       {/* Usage Limit Dialog */}
       <LimitReachedDialog
