@@ -28,12 +28,16 @@
 
 ## 🧪 Testing Protocol
 
-### Step 1: Deploy to Replit
+### Step 1: Deploy to Render
 
-```bash
-# Replit will auto-deploy on file save, or manually restart:
-# Click "Stop" then "Run" in Replit interface
-```
+**Automatic Deployment**:
+Render will automatically deploy when changes are pushed to the `main` branch on GitHub.
+
+**Monitor Deployment**:
+1. Go to Render dashboard: https://dashboard.render.com
+2. Find service: `streamline-mvp`
+3. Check "Events" tab for deployment status
+4. Wait for "Deploy succeeded" message
 
 **Expected Console Output** (on startup):
 ```
@@ -41,7 +45,7 @@
 [Late Service] Warning: LATE_API_KEY is not configured in environment
 ```
 
-If Late API key warning appears, check `.env` file has `LATE_API_KEY` set.
+If Late API key warning appears, check Render environment variables has `LATE_API_KEY` set.
 
 ---
 
@@ -70,7 +74,7 @@ If Late API key warning appears, check `.env` file has `LATE_API_KEY` set.
 
 4. **Monitor Console Logs**
 
-   Watch Replit console for these new debug logs:
+   Watch Render logs (Dashboard → streamline-mvp → Logs) for these new debug logs:
 
    **Success Case:**
    ```
@@ -161,7 +165,7 @@ If posting still fails through the app, test Late API directly:
 ### Setup Environment Variables
 
 ```bash
-# Get Late API key from Replit secrets or .env
+# Get Late API key from Render environment variables
 export LATE_API_KEY="your_late_api_key_here"
 
 # Get Miguel's Late profile ID from database
@@ -189,7 +193,7 @@ bash scripts/test-late-api.sh
 
 **❌ HTTP 401/403**: Authentication error
 - Late API key invalid or expired
-- Check `.env` file and Replit secrets
+- Check Render environment variables (Dashboard → streamline-mvp → Environment)
 - Verify `LATE_API_KEY` matches Late.dev dashboard
 
 **❌ HTTP 400**: Bad request
@@ -249,7 +253,7 @@ bash scripts/test-late-api.sh
 
 **Solutions:**
 1. Check `[Late Debug] Raw body:` log for actual response
-2. Verify `LATE_API_KEY` in Replit secrets
+2. Verify `LATE_API_KEY` in Render environment variables
 3. Test with `scripts/test-late-api.sh`
 4. Check Late.dev dashboard for API key status
 
@@ -357,4 +361,4 @@ Once Miguel successfully posts to Instagram:
 **Owner**: Raunek Pratap
 **Date**: November 6, 2025
 **Status**: Ready for Testing
-**Test Environment**: Replit Production
+**Test Environment**: Render Production (streamline-mvp)
