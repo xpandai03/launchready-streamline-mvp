@@ -58,16 +58,31 @@ async function runMigration() {
     console.log("📝 Step 2: Creating indexes...");
 
     await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS idx_media_assets_user_id ON media_assets(user_id);
-      CREATE INDEX IF NOT EXISTS idx_media_assets_status ON media_assets(status);
-      CREATE INDEX IF NOT EXISTS idx_media_assets_provider ON media_assets(provider);
-      CREATE INDEX IF NOT EXISTS idx_media_assets_type ON media_assets(type);
-      CREATE INDEX IF NOT EXISTS idx_media_assets_created_at ON media_assets(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_media_assets_processing ON media_assets(status, created_at)
-        WHERE status = 'processing';
+      CREATE INDEX IF NOT EXISTS idx_media_assets_user_id ON media_assets(user_id)
     `);
 
-    console.log("✅ Created indexes\n");
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_media_assets_status ON media_assets(status)
+    `);
+
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_media_assets_provider ON media_assets(provider)
+    `);
+
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_media_assets_type ON media_assets(type)
+    `);
+
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_media_assets_created_at ON media_assets(created_at DESC)
+    `);
+
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_media_assets_processing ON media_assets(status, created_at)
+        WHERE status = 'processing'
+    `);
+
+    console.log("✅ Created 6 indexes\n");
 
     // Step 3: Add media_generations_created to user_usage
     console.log("📝 Step 3: Updating user_usage table...");
