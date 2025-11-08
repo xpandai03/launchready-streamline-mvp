@@ -37,6 +37,7 @@ import { MediaPreviewCard } from "@/components/MediaPreviewCard";
 import { LimitReachedDialog } from "@/components/LimitReachedDialog";
 import { UGCAdPreviewModal } from "@/components/UGCAdPreviewModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ImageUploadField } from "@/components/ui/ImageUploadField";
 import { formatDistanceToNow } from "date-fns";
 import {
   ICP_OPTIONS,
@@ -257,25 +258,15 @@ export default function AIStudioPage() {
                 </p>
               </div>
 
-              {/* 1. Product Image */}
-              <div className="space-y-2">
-                <Label htmlFor="product-image" className="text-white text-sm font-medium flex items-center gap-2">
-                  <Upload className="h-4 w-4" />
-                  Product Image
-                  <span className="text-white/50 font-normal">(Optional)</span>
-                </Label>
-                <Input
-                  id="product-image"
-                  type="url"
-                  value={productImage}
-                  onChange={(e) => setProductImage(e.target.value)}
-                  placeholder="https://yourproduct.com/image.jpg"
-                  className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                />
-                <p className="text-xs text-white/50">
-                  Paste a URL to your product photo for visual reference
-                </p>
-              </div>
+              {/* 1. Product Image - Drag & Drop + URL */}
+              <ImageUploadField
+                value={productImage}
+                onChange={setProductImage}
+                label="Product Image"
+                required={false}
+                description="Upload an image or paste a URL for visual reference"
+                maxSizeMB={10}
+              />
 
               {/* 2. Product Name */}
               <div className="space-y-2">
