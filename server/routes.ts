@@ -1543,7 +1543,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Start video generation (background process will handle polling)
-      processMediaGeneration(assetId).catch((err) => {
+      processMediaGeneration(assetId, {
+        provider: 'kie-veo3',
+        type: 'video',
+        prompt: videoPrompt,
+        referenceImageUrl: sourceUrl,
+        options: null,
+      }).catch((err) => {
         console.error(`[AI Use For Video] Background generation failed for ${assetId}:`, err);
       });
 
@@ -1731,7 +1737,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
               metadata: statusResult.metadata,
             });
 
-            console.log(`[Media Generation] ✅ Completed: ${assetId}`);
+            // ✅ Enhanced logging for Veo3 video completions
+            if (params.provider.includes('veo3')) {
+              const duration = Math.round((Date.now() - startTime) / 1000);
+              console.log(`[Veo3 ✅] Video saved successfully:`, {
+                assetId,
+                videoUrl: finalResultUrl.substring(0, 80) + '...',
+                durationSeconds: duration,
+              });
+            } else {
+              console.log(`[Media Generation] ✅ Completed: ${assetId}`);
+            }
             return;
           }
 
