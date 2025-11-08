@@ -91,28 +91,47 @@ export const kieService = {
     console.log('[KIE Upload] Blob or local URL detected, fetching and uploading to KIE...');
 
     try {
-      // Fetch the blob URL to get the actual file data
+      // Fetch the file to get the actual data
       const fileResponse = await fetch(fileUrl);
       if (!fileResponse.ok) {
-        throw new Error(`Failed to fetch blob URL: ${fileResponse.status}`);
+        throw new Error(`Failed to fetch file: ${fileResponse.status}`);
       }
 
-      const fileBlob = await fileResponse.blob();
-      const fileName = `upload-${Date.now()}.${fileBlob.type.split('/')[1] || 'jpg'}`;
+      // Convert to buffer for Node.js form upload
+      const arrayBuffer = await fileResponse.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
 
-      console.log('[KIE Upload] File fetched, size:', fileBlob.size, 'bytes, type:', fileBlob.type);
+      // Determine file extension from content-type
+      const contentType = fileResponse.headers.get('content-type') || 'image/jpeg';
+      const extension = contentType.split('/')[1] || 'jpg';
+      const fileName = `ugc-upload-${Date.now()}.${extension}`;
 
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('file', fileBlob, fileName);
+      console.log('[KIE Upload] File fetched, size:', buffer.length, 'bytes, type:', contentType);
+
+      // Create multipart form data manually since FormData doesn't work in Node.js the same way
+      const boundary = `----KIEUpload${Date.now()}`;
+      const formDataParts: Buffer[] = [];
+
+      // Add file field
+      formDataParts.push(Buffer.from(
+        `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n` +
+        `Content-Type: ${contentType}\r\n\r\n`
+      ));
+      formDataParts.push(buffer);
+      formDataParts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+
+      const formDataBuffer = Buffer.concat(formDataParts);
 
       // Upload to KIE
       const response = await fetch(`${KIE_BASE_URL}/api/v1/file/upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${KIE_API_KEY}`,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': formDataBuffer.length.toString(),
         },
-        body: formData,
+        body: formDataBuffer,
       });
 
       const responseText = await response.text();
@@ -146,6 +165,7 @@ export const kieService = {
 
     } catch (error: any) {
       console.error('[KIE Upload] ❌ File upload failed:', error);
+      console.error('[KIE Upload] Error details:', error.stack || error.toString());
       throw new Error(`Failed to upload file to KIE: ${error.message}`);
     }
   },
