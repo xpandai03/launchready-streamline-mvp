@@ -8,7 +8,8 @@ import { stripeService } from "./services/stripe";
 import { postToSocialSchema } from "./validators/social";
 import { generateMediaSchema, validateProviderType } from "./validators/mediaGen";
 import { generateMedia, checkMediaStatus } from "./services/mediaGen";
-import { GenerationMode, generatePrompt, formatICPForPrompt, formatSceneForPrompt } from "./prompts/ugc-presets";
+import { GenerationMode, generatePrompt, formatICPForPrompt, formatSceneForPrompt, type PromptVariables } from "./prompts/ugc-presets";
+import { ugcChainService } from "./services/ugcChain";
 import { supabaseAdmin } from "./services/supabaseAuth";
 import { requireAuth } from "./middleware/auth";
 import { checkVideoLimit, checkPostLimit, checkMediaGenerationLimit, incrementVideoUsage, incrementPostUsage, incrementMediaGenerationUsage, getCurrentUsage, FREE_VIDEO_LIMIT, FREE_POST_LIMIT, FREE_MEDIA_GENERATION_LIMIT } from "./services/usageLimits";
@@ -1576,16 +1577,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('[AI UGC Preset] Created media asset:', assetId);
 
-      // Start generation in background
-      processMediaGeneration(assetId, {
-        provider,
-        type,
-        prompt: generatedPrompt,
-        referenceImageUrl: productImageUrl,
-        options: null,
-      }).catch((error) => {
-        console.error('[AI UGC Preset] Background processing error:', error);
-      });
+      // Mode A: Use chain orchestration service
+      if (generationMode === 'nanobana+veo3') {
+        console.log('[AI UGC Preset] Starting Mode A chain workflow');
+        ugcChainService.startImageGeneration({
+          assetId,
+          promptVariables,
+          productImageUrl,
+        }).catch((error) => {
+          console.error('[AI UGC Chain] Background chain error:', error);
+        });
+      } else {
+        // Mode B & C: Use standard generation process
+        console.log(`[AI UGC Preset] Starting ${generationMode} direct generation`);
+        processMediaGeneration(assetId, {
+          provider,
+          type,
+          prompt: generatedPrompt,
+          referenceImageUrl: productImageUrl,
+          options: null,
+        }).catch((error) => {
+          console.error('[AI UGC Preset] Background processing error:', error);
+        });
+      }
 
       // Increment usage counter
       await incrementMediaGenerationUsage(req.userId!);
@@ -1838,6 +1852,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========================================
 
   /**
+   * Background function to process chain workflow (Phase 5: Mode A)
+   * Polls for image → analyzes with Vision → generates video → polls for video
+   */
+  async function processChainWorkflow(assetId: string): Promise<void> {
+    const pollInterval = 30000; // 30 seconds
+    const maxAttempts = 120; // 120 * 30s = 60 minutes (chain takes longer)
+    const startTime = Date.now();
+    const timeoutMs = 60 * 60 * 1000; // 60 minutes timeout for full chain
+    let pollAttempts = 0;
+
+    console.log('[Chain Workflow] Starting chain polling for asset', assetId);
+
+    try {
+      while (pollAttempts < maxAttempts) {
+        // Check timeout
+        const elapsed = Date.now() - startTime;
+        if (elapsed > timeoutMs) {
+          const elapsedMinutes = Math.round(elapsed / 60000);
+          console.error(`[Chain Workflow] ❌ TIMEOUT after ${elapsedMinutes} minutes for ${assetId}`);
+
+          await ugcChainService.handleChainError(
+            assetId,
+            'error' as any,
+            `Chain workflow timed out after ${elapsedMinutes} minutes`
+          );
+
+          return;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        pollAttempts++;
+
+        const asset = await storage.getMediaAsset(assetId);
+        if (!asset) {
+          console.error(`[Chain Workflow] Asset ${assetId} not found`);
+          return;
+        }
+
+        const chainMetadata = asset.chainMetadata as any;
+        if (!chainMetadata) {
+          console.error(`[Chain Workflow] No chain metadata for ${assetId}`);
+          return;
+        }
+
+        const step = chainMetadata.step;
+        const elapsedSeconds = Math.round(elapsed / 1000);
+
+        console.log(`[Chain Workflow] Poll ${pollAttempts}: Step=${step}, Elapsed=${elapsedSeconds}s`);
+
+        // Handle different chain steps
+        if (step === 'generating_image') {
+          // Poll for image completion
+          const imageReady = await ugcChainService.checkImageStatus(assetId);
+          if (imageReady) {
+            console.log(`[Chain Workflow] Image ready, moved to analysis/video generation`);
+          }
+        } else if (step === 'generating_video') {
+          // Poll for video completion
+          const videoReady = await ugcChainService.checkVideoStatus(assetId);
+          if (videoReady) {
+            console.log(`[Chain Workflow] ✅ Video ready, chain complete!`);
+            return; // Chain complete
+          }
+        } else if (step === 'completed') {
+          console.log(`[Chain Workflow] Chain already completed for ${assetId}`);
+          return;
+        } else if (step === 'error') {
+          console.error(`[Chain Workflow] Chain failed for ${assetId}:`, chainMetadata.error);
+          return;
+        }
+
+        // Continue polling
+      }
+
+      // Max attempts reached
+      console.error(`[Chain Workflow] ❌ Max polling attempts reached for ${assetId}`);
+      await ugcChainService.handleChainError(
+        assetId,
+        'error' as any,
+        'Chain workflow exceeded maximum polling attempts'
+      );
+
+    } catch (error: any) {
+      console.error('[Chain Workflow] Fatal error:', error);
+      await ugcChainService.handleChainError(assetId, 'error' as any, error.message);
+    }
+  }
+
+  /**
    * Background function to process media generation
    * Polls KIE API every 30s until complete (max 20 minutes)
    * Implements 3x retry with exponential backoff on failures
@@ -1852,6 +1955,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       options?: any;
     }
   ): Promise<void> {
+    // ✅ PHASE 5: Check if this is a chain workflow
+    const asset = await storage.getMediaAsset(assetId);
+    if (asset?.generationMode === 'nanobana+veo3') {
+      console.log('[Media Generation] Detected chain workflow, using chain polling');
+      return processChainWorkflow(assetId);
+    }
+
     const maxAttempts = 60; // ✅ PHASE 4.7.1: 60 * 30s = 30 minutes (was 40 = 20 min)
     const pollInterval = 30000; // 30 seconds
     const timeoutMs = 30 * 60 * 1000; // ✅ PHASE 4.7.1: 30 minutes timeout

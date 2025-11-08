@@ -26,6 +26,16 @@ export interface GenerateCaptionParams {
 }
 
 /**
+ * Parameters for image analysis (Phase 5: UGC Chain)
+ */
+export interface AnalyzeImageParams {
+  imageUrl: string;             // URL of the image to analyze
+  prompt: string;               // What to analyze (e.g., "Describe this product photo in detail")
+  model?: string;               // Optional: override default model (default: gpt-4o)
+  maxTokens?: number;           // Optional: max response length
+}
+
+/**
  * Caption generation response
  */
 export interface CaptionGenerationResult {
@@ -166,6 +176,120 @@ export const openaiService = {
       // Re-throw with more context if it's a network error
       if (error instanceof TypeError && error.message.includes('fetch')) {
         throw new Error('Network error: Unable to reach OpenAI API. Please check your internet connection.');
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Analyze an image using OpenAI Vision API (Phase 5: UGC Chain)
+   *
+   * Used in Mode A (NanoBanana + Veo3) to analyze the generated image
+   * and create a detailed description for the video prompt
+   *
+   * @param params - Image URL and analysis prompt
+   * @returns Detailed image analysis text
+   * @throws Error if API call fails
+   */
+  async analyzeImage(params: AnalyzeImageParams): Promise<string> {
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY is not configured. Please add it to your environment variables.');
+    }
+
+    const model = params.model || 'gpt-4o'; // gpt-4o has vision capabilities
+    const maxTokens = params.maxTokens || 500;
+
+    console.log('[OpenAI Vision] Analyzing image:', {
+      imageUrl: params.imageUrl.substring(0, 60) + '...',
+      prompt: params.prompt.substring(0, 100) + '...',
+      model,
+    });
+
+    try {
+      const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: params.prompt,
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: params.imageUrl,
+                    detail: 'high', // Request detailed analysis
+                  },
+                },
+              ],
+            },
+          ],
+          max_tokens: maxTokens,
+          temperature: 0.3, // Lower temperature for more factual descriptions
+        }),
+      });
+
+      // Safe response parsing
+      const responseText = await response.text();
+
+      if (responseText.trim() === '') {
+        console.error('[OpenAI Vision] Empty response body received');
+        throw new Error(`OpenAI Vision API returned empty response (HTTP ${response.status})`);
+      }
+
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('[OpenAI Vision] JSON parse error:', parseError);
+        console.error('[OpenAI Vision] Raw response:', responseText.substring(0, 200));
+        throw new Error(`OpenAI Vision API returned invalid JSON (HTTP ${response.status}): ${responseText.substring(0, 200)}`);
+      }
+
+      if (!response.ok) {
+        console.error('[OpenAI Vision] API Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: data,
+        });
+
+        const errorMessage = data.error?.message || data.error || 'Unknown error from OpenAI Vision API';
+        throw new Error(`OpenAI Vision API Error (${response.status}): ${errorMessage}`);
+      }
+
+      // Extract analysis from response
+      const analysis = data.choices?.[0]?.message?.content?.trim();
+
+      if (!analysis || analysis.length === 0) {
+        console.error('[OpenAI Vision] No analysis in response or empty analysis:', data);
+        throw new Error('OpenAI Vision API returned no analysis content or empty analysis');
+      }
+
+      // Validate analysis is reasonable length (at least 20 characters)
+      if (analysis.length < 20) {
+        console.warn('[OpenAI Vision] Analysis too short, may be incomplete:', analysis);
+      }
+
+      console.log('[OpenAI Vision] Image analyzed successfully:', {
+        analysisLength: analysis.length,
+        tokensUsed: data.usage?.total_tokens,
+        model: data.model || model,
+        analysisPreview: analysis.substring(0, 100) + '...',
+      });
+
+      return analysis;
+    } catch (error) {
+      // Re-throw with more context if it's a network error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to reach OpenAI Vision API. Please check your internet connection.');
       }
       throw error;
     }
