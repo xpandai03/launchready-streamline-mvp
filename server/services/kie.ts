@@ -14,6 +14,7 @@ import axios from 'axios';
 
 const KIE_API_KEY = process.env.KIE_API_KEY;
 const KIE_BASE_URL = 'https://api.kie.ai';
+const KIE_UPLOAD_URL = 'https://kieai.redpandaai.co';
 
 if (!KIE_API_KEY) {
   console.warn('[KIE Service] Warning: KIE_API_KEY not configured');
@@ -117,12 +118,14 @@ export const kieService = {
         filename: fileName,
         contentType: contentType,
       });
+      form.append('uploadPath', 'ugc-studio/uploads'); // Directory for UGC uploads
 
-      console.log('[KIE Upload] Uploading to KIE File Upload API...');
+      const uploadUrl = `${KIE_UPLOAD_URL}/api/file-stream-upload`;
+      console.log('[KIE Upload] Uploading to:', uploadUrl);
 
       // Upload to KIE using axios with form-data
       const uploadResponse = await axios.post(
-        `${KIE_BASE_URL}/api/v1/file/upload`,
+        uploadUrl,
         form,
         {
           headers: {
@@ -136,13 +139,15 @@ export const kieService = {
 
       const data = uploadResponse.data;
 
+      console.log('[KIE Upload] Response:', { success: data.success, code: data.code, msg: data.msg });
+
       if (data.code !== 200 && !data.success) {
         console.error('[KIE Upload] API Error:', data);
         throw new Error(`KIE Upload API Error: ${data.msg || data.message || 'Unknown error'}`);
       }
 
-      // Extract public URL from response
-      const uploadedUrl = data.data?.fileUrl || data.data?.url || data.fileUrl || data.url;
+      // Extract public URL from response (downloadUrl field)
+      const uploadedUrl = data.data?.downloadUrl || data.data?.fileUrl || data.data?.url || data.fileUrl || data.url;
 
       if (!uploadedUrl) {
         console.error('[KIE Upload] No fileUrl in response:', data);
@@ -186,12 +191,15 @@ export const kieService = {
         filename: fileName,
         contentType: mimeType,
       });
+      form.append('uploadPath', 'ugc-studio/uploads'); // Directory for UGC uploads
 
-      console.log('[KIE Upload Buffer] Uploading to KIE File Upload API...');
+      const uploadUrl = `${KIE_UPLOAD_URL}/api/file-stream-upload`;
+      console.log('[KIE Upload Buffer] Uploading to:', uploadUrl);
+      console.log('[KIE Upload Buffer] File info:', { filename: fileName, size: buffer.length, type: mimeType });
 
       // Upload to KIE using axios with form-data
       const uploadResponse = await axios.post(
-        `${KIE_BASE_URL}/api/v1/file/upload`,
+        uploadUrl,
         form,
         {
           headers: {
@@ -205,12 +213,15 @@ export const kieService = {
 
       const data = uploadResponse.data;
 
+      console.log('[KIE Upload Buffer] Response:', { success: data.success, code: data.code, msg: data.msg });
+
       if (data.code !== 200 && !data.success) {
         console.error('[KIE Upload Buffer] API Error:', data);
         throw new Error(`KIE Upload API Error: ${data.msg || data.message || 'Unknown error'}`);
       }
 
-      const uploadedUrl = data.data?.fileUrl || data.data?.url || data.fileUrl || data.url;
+      // Extract public URL from response (downloadUrl field)
+      const uploadedUrl = data.data?.downloadUrl || data.data?.fileUrl || data.data?.url || data.fileUrl || data.url;
 
       if (!uploadedUrl) {
         console.error('[KIE Upload Buffer] No fileUrl in response:', data);
