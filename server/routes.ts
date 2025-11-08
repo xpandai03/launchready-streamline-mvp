@@ -1,8 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import express from "express";
+import multer from "multer";
 import { storage } from "./storage";
 import { klapService } from "./services/klap";
+import { kieService } from "./services/kie";
 import { lateService } from "./services/late";
 import { stripeService } from "./services/stripe";
 import { postToSocialSchema } from "./validators/social";
@@ -50,6 +52,22 @@ const generateUGCPresetSchema = z.object({
   videoSetting: z.string(),
   generationMode: z.enum(["nanobana+veo3", "veo3-only", "sora2"]),
   productImageUrl: z.string().url().optional(),
+});
+
+// Configure multer for file uploads (in-memory storage)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max
+  },
+  fileFilter: (req, file, cb) => {
+    // Only accept images
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  },
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1478,12 +1496,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
    *
    * Generate UGC Ad using preset templates (Phase 4)
    * Takes product brief and converts to prompt using preset templates
+   * Supports multipart/form-data for file uploads
    */
-  app.post("/api/ai/generate-ugc-preset", requireAuth, async (req, res) => {
+  app.post("/api/ai/generate-ugc-preset", requireAuth, upload.single('productImage'), async (req, res) => {
     try {
       console.log(`[AI UGC Preset] Request from user: ${req.userId}`);
+      console.log(`[AI UGC Preset] Has uploaded file:`, !!req.file);
 
-      // Validate input
+      // Validate input (text fields from form body)
       const validation = generateUGCPresetSchema.safeParse(req.body);
       if (!validation.success) {
         return res.status(400).json({
@@ -1500,6 +1520,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         generationMode,
         productImageUrl,
       } = validation.data;
+
+      // Handle uploaded file: upload to KIE and get public URL
+      let finalProductImageUrl = productImageUrl;
+      if (req.file) {
+        console.log(`[AI UGC Preset] File uploaded:`, {
+          name: req.file.originalname,
+          size: req.file.size,
+          mimeType: req.file.mimetype,
+        });
+
+        try {
+          // Upload file buffer to KIE and get public URL
+          const publicUrl = await kieService.uploadFileBuffer(
+            req.file.buffer,
+            req.file.mimetype,
+            req.file.originalname
+          );
+          console.log(`[AI UGC Preset] File uploaded to KIE successfully:`, publicUrl);
+          finalProductImageUrl = publicUrl;
+        } catch (uploadError: any) {
+          console.error(`[AI UGC Preset] Failed to upload file to KIE:`, uploadError.message);
+          return res.status(500).json({
+            error: 'Failed to upload product image',
+            details: uploadError.message,
+          });
+        }
+      }
 
       // Check usage limit
       const canGenerate = await checkMediaGenerationLimit(req.userId!);
@@ -1553,7 +1600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         provider,
         type,
         prompt: generatedPrompt,
-        referenceImageUrl: productImageUrl || null,
+        referenceImageUrl: finalProductImageUrl || null,
         status: 'processing',
         taskId: null,
         resultUrl: null,
@@ -1583,7 +1630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ugcChainService.startImageGeneration({
           assetId,
           promptVariables,
-          productImageUrl,
+          productImageUrl: finalProductImageUrl,
         }).then(() => {
           // Start polling loop after image generation task is submitted
           console.log('[AI UGC Preset] Starting chain polling workflow for asset:', assetId);
@@ -1600,7 +1647,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           provider,
           type,
           prompt: generatedPrompt,
-          referenceImageUrl: productImageUrl,
+          referenceImageUrl: finalProductImageUrl,
           options: null,
         }).catch((error) => {
           console.error('[AI UGC Preset] Background processing error:', error);

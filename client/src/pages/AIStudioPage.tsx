@@ -82,7 +82,8 @@ interface GenerateMediaResponse {
 
 export default function AIStudioPage() {
   // Form state - Phase 4 Simplified (5 fields)
-  const [productImage, setProductImage] = useState("");
+  const [productImage, setProductImage] = useState(""); // Preview URL (for display)
+  const [productImageFile, setProductImageFile] = useState<File | null>(null); // Actual file object
   const [productName, setProductName] = useState("");
   const [productFeatures, setProductFeatures] = useState("");
   const [customerPersona, setCustomerPersona] = useState(ICP_OPTIONS[0].value);
@@ -124,9 +125,41 @@ export default function AIStudioPage() {
       customerPersona: string;
       videoSetting: string;
       generationMode: string;
+      productImageFile?: File | null;
       productImageUrl?: string;
     }) => {
-      const response = await apiRequest('POST', '/api/ai/generate-ugc-preset', params);
+      // Use FormData to send file + other fields
+      const formData = new FormData();
+      formData.append('productName', params.productName);
+      formData.append('productFeatures', params.productFeatures);
+      formData.append('customerPersona', params.customerPersona);
+      formData.append('videoSetting', params.videoSetting);
+      formData.append('generationMode', params.generationMode);
+
+      // Add file if provided (drag-and-drop upload)
+      if (params.productImageFile) {
+        formData.append('productImage', params.productImageFile);
+      }
+      // Or add URL if provided (manual URL paste)
+      else if (params.productImageUrl) {
+        formData.append('productImageUrl', params.productImageUrl);
+      }
+
+      // Send as multipart/form-data (don't set Content-Type, browser will set it with boundary)
+      const response = await fetch('/api/ai/generate-ugc-preset', {
+        method: 'POST',
+        headers: {
+          // Note: Don't set Content-Type for FormData - browser sets it automatically with boundary
+        },
+        credentials: 'include',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Generation failed');
+      }
+
       return await response.json() as GenerateMediaResponse;
     },
     onSuccess: () => {
@@ -134,6 +167,7 @@ export default function AIStudioPage() {
       setProductName("");
       setProductFeatures("");
       setProductImage("");
+      setProductImageFile(null); // Clear file object
       // Reset to defaults (don't clear dropdowns - keep user's last selection)
 
       queryClient.invalidateQueries({ queryKey: ['/api/ai/media'] });
@@ -209,7 +243,8 @@ export default function AIStudioPage() {
       customerPersona,
       videoSetting,
       generationMode,
-      productImageUrl: productImage.trim() || undefined,
+      productImageFile: productImageFile, // Send actual file object
+      productImageUrl: productImageFile ? undefined : (productImage.trim() || undefined), // Only send URL if no file
     });
   };
 
@@ -262,6 +297,7 @@ export default function AIStudioPage() {
               <ImageUploadField
                 value={productImage}
                 onChange={setProductImage}
+                onFileChange={setProductImageFile}
                 label="Product Image"
                 required={false}
                 description="Upload an image or paste a URL for visual reference"

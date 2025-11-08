@@ -162,6 +162,75 @@ export const kieService = {
       throw new Error(`Failed to upload file to KIE: ${error.message}`);
     }
   },
+
+  /**
+   * Upload file buffer directly to KIE.ai and get public URL
+   * Use this when you already have the file data in memory (e.g., from multer)
+   */
+  async uploadFileBuffer(buffer: Buffer, mimeType: string, originalFilename?: string): Promise<string> {
+    if (!KIE_API_KEY) {
+      throw new Error('KIE_API_KEY is not configured. Please add it to your .env file.');
+    }
+
+    console.log('[KIE Upload Buffer] Uploading file buffer to KIE...');
+    console.log('[KIE Upload Buffer] Buffer size:', buffer.length, 'bytes, type:', mimeType);
+
+    try {
+      // Determine file extension from MIME type
+      const extension = mimeType.split('/')[1] || 'jpg';
+      const fileName = originalFilename || `ugc_upload_${Date.now()}.${extension}`;
+
+      // Create form data using form-data library
+      const form = new FormData();
+      form.append('file', buffer, {
+        filename: fileName,
+        contentType: mimeType,
+      });
+
+      console.log('[KIE Upload Buffer] Uploading to KIE File Upload API...');
+
+      // Upload to KIE using axios with form-data
+      const uploadResponse = await axios.post(
+        `${KIE_BASE_URL}/api/v1/file/upload`,
+        form,
+        {
+          headers: {
+            'Authorization': `Bearer ${KIE_API_KEY}`,
+            ...form.getHeaders(), // Adds Content-Type with boundary
+          },
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity,
+        }
+      );
+
+      const data = uploadResponse.data;
+
+      if (data.code !== 200 && !data.success) {
+        console.error('[KIE Upload Buffer] API Error:', data);
+        throw new Error(`KIE Upload API Error: ${data.msg || data.message || 'Unknown error'}`);
+      }
+
+      const uploadedUrl = data.data?.fileUrl || data.data?.url || data.fileUrl || data.url;
+
+      if (!uploadedUrl) {
+        console.error('[KIE Upload Buffer] No fileUrl in response:', data);
+        throw new Error('KIE Upload API did not return a file URL');
+      }
+
+      console.log('[KIE Upload Buffer ✅] Uploaded to:', uploadedUrl);
+      return uploadedUrl;
+
+    } catch (error: any) {
+      console.error('[KIE Upload Buffer ❌] Upload failed:', error.message);
+      if (error.response) {
+        console.error('[KIE Upload Buffer] Response status:', error.response.status);
+        console.error('[KIE Upload Buffer] Response data:', error.response.data);
+      }
+      console.error('[KIE Upload Buffer] Error details:', error.stack || error.toString());
+      throw new Error(`Failed to upload file buffer to KIE: ${error.message}`);
+    }
+  },
+
   /**
    * Generate video using Veo3
    */

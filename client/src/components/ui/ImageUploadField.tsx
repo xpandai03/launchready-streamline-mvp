@@ -20,6 +20,7 @@ import { Label } from './label';
 interface ImageUploadFieldProps {
   value: string;
   onChange: (value: string) => void;
+  onFileChange?: (file: File | null) => void; // New: callback for actual File object
   label?: string;
   required?: boolean;
   description?: string;
@@ -29,6 +30,7 @@ interface ImageUploadFieldProps {
 export function ImageUploadField({
   value,
   onChange,
+  onFileChange,
   label = "Product Image",
   required = false,
   description = "Upload or paste a URL to your product photo",
@@ -67,10 +69,15 @@ export function ImageUploadField({
       return;
     }
 
-    // Create blob URL for preview and form value
+    // Create blob URL for preview (display only)
     const blobUrl = URL.createObjectURL(file);
     setPreviewUrl(blobUrl);
-    onChange(blobUrl);
+    onChange(blobUrl); // For backward compatibility - preview URL
+
+    // Pass actual File object to parent for upload
+    if (onFileChange) {
+      onFileChange(file);
+    }
   };
 
   // Handle file input change
@@ -111,6 +118,11 @@ export function ImageUploadField({
     setError("");
     onChange(url);
     setPreviewUrl(url);
+
+    // Clear file object when switching to URL mode
+    if (onFileChange) {
+      onFileChange(null);
+    }
   };
 
   // Clear image
@@ -120,6 +132,10 @@ export function ImageUploadField({
     setError("");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+    // Clear file object
+    if (onFileChange) {
+      onFileChange(null);
     }
   };
 
