@@ -9,6 +9,8 @@
  * Documentation: https://docs.kie.ai/
  */
 
+import FormData from 'form-data';
+
 const KIE_API_KEY = process.env.KIE_API_KEY;
 const KIE_BASE_URL = 'https://api.kie.ai';
 
@@ -108,30 +110,23 @@ export const kieService = {
 
       console.log('[KIE Upload] File fetched, size:', buffer.length, 'bytes, type:', contentType);
 
-      // Create multipart form data manually since FormData doesn't work in Node.js the same way
-      const boundary = `----KIEUpload${Date.now()}`;
-      const formDataParts: Buffer[] = [];
+      // Create form data using form-data library (Node.js compatible)
+      const form = new FormData();
+      form.append('file', buffer, {
+        filename: fileName,
+        contentType: contentType,
+      });
 
-      // Add file field
-      formDataParts.push(Buffer.from(
-        `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n` +
-        `Content-Type: ${contentType}\r\n\r\n`
-      ));
-      formDataParts.push(buffer);
-      formDataParts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+      console.log('[KIE Upload] Uploading to KIE File Upload API...');
 
-      const formDataBuffer = Buffer.concat(formDataParts);
-
-      // Upload to KIE
+      // Upload to KIE with form-data headers
       const response = await fetch(`${KIE_BASE_URL}/api/v1/file/upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${KIE_API_KEY}`,
-          'Content-Type': `multipart/form-data; boundary=${boundary}`,
-          'Content-Length': formDataBuffer.length.toString(),
+          ...form.getHeaders(), // This adds the correct multipart boundary
         },
-        body: formDataBuffer,
+        body: form as any, // form-data stream is compatible with fetch body
       });
 
       const responseText = await response.text();
