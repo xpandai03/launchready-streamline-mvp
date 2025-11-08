@@ -32,12 +32,14 @@ import {
   Loader2,
   Upload,
   Info,
+  Settings,
 } from "lucide-react";
 import { MediaPreviewCard } from "@/components/MediaPreviewCard";
 import { LimitReachedDialog } from "@/components/LimitReachedDialog";
 import { UGCAdPreviewModal } from "@/components/UGCAdPreviewModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ImageUploadField } from "@/components/ui/ImageUploadField";
+import { CaptionSettingsModal } from "@/components/CaptionSettingsModal";
 import { formatDistanceToNow } from "date-fns";
 import {
   ICP_OPTIONS,
@@ -91,6 +93,7 @@ export default function AIStudioPage() {
   const [generationMode, setGenerationMode] = useState(MODE_OPTIONS[0].value);
   const [showLimitDialog, setShowLimitDialog] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
+  const [captionSettingsOpen, setCaptionSettingsOpen] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -268,9 +271,20 @@ export default function AIStudioPage() {
       <div className="relative z-50 w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 pt-24 pb-12">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
-            UGC Ad Studio
-          </h1>
+          <div className="flex items-start justify-between mb-2">
+            <h1 className="text-3xl md:text-4xl font-bold text-white">
+              UGC Ad Studio
+            </h1>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCaptionSettingsOpen(true)}
+              className="border-white/20 text-white hover:bg-white/10 hover:text-white flex items-center gap-2"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="hidden sm:inline">Caption Settings</span>
+            </Button>
+          </div>
           <p className="text-white/70 mb-3">
             Generate influencer-style videos and images for your products with AI
           </p>
@@ -479,6 +493,15 @@ export default function AIStudioPage() {
                 <p className="text-xs text-white/60 text-center">
                   Your ad will appear in the gallery below once ready
                 </p>
+                <button
+                  type="button"
+                  onClick={() => setCaptionSettingsOpen(true)}
+                  className="text-xs text-white/50 hover:text-blue-400 transition-colors text-center w-full mt-2 flex items-center justify-center gap-1"
+                >
+                  <Settings className="h-3 w-3" />
+                  <span>Captions will be auto-generated when posting</span>
+                  <span className="text-blue-400">→ Customize AI caption style</span>
+                </button>
               </div>
             </form>
           </CardContent>
@@ -560,6 +583,12 @@ export default function AIStudioPage() {
         onOpenChange={setShowLimitDialog}
         limitType="media"
         limit={10}
+      />
+
+      {/* Caption Settings Modal */}
+      <CaptionSettingsModal
+        open={captionSettingsOpen}
+        onOpenChange={setCaptionSettingsOpen}
       />
     </div>
   );
