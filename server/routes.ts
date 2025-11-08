@@ -1909,10 +1909,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Handle different chain steps
         if (step === 'generating_image') {
+          // ✅ Add per-step timeout for image generation (10 minutes max)
+          const imageStartTime = chainMetadata.timestamps?.imageStarted;
+          if (imageStartTime) {
+            const imageElapsed = Date.now() - new Date(imageStartTime).getTime();
+            const imageMinutes = Math.round(imageElapsed / 60000);
+
+            if (imageElapsed > 10 * 60 * 1000) { // 10 minutes
+              console.error(`[Chain Workflow] ❌ Image generation timeout after ${imageMinutes} minutes`);
+              await ugcChainService.handleChainError(
+                assetId,
+                'generating_image',
+                `NanoBanana image generation timed out after ${imageMinutes} minutes`
+              );
+              return;
+            }
+          }
+
           // Poll for image completion
           const imageReady = await ugcChainService.checkImageStatus(assetId);
           if (imageReady) {
-            console.log(`[Chain Workflow] Image ready, moved to analysis/video generation`);
+            console.log(`[Chain Workflow] ✅ Image ready, moved to analysis/video generation`);
           }
         } else if (step === 'generating_video') {
           // Poll for video completion

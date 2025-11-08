@@ -241,6 +241,18 @@ export const kieService = {
     const successFlag = rawData.successFlag;
     const state = rawData.state; // ✅ PHASE 4.7.1: Veo3 uses 'state' field instead of 'successFlag'
 
+    // ✅ DEBUG: Log raw response for Flux-Kontext to diagnose parsing issues
+    if (provider.includes('flux-kontext')) {
+      console.log('[KIE Flux-Kontext Debug] Raw response:', JSON.stringify(rawData, null, 2));
+      console.log('[KIE Flux-Kontext Debug] Fields:', {
+        successFlag,
+        state,
+        hasResponse: !!rawData.response,
+        hasResultJson: !!rawData.resultJson,
+        resultJsonType: typeof rawData.resultJson,
+      });
+    }
+
     // ✅ PHASE 4.7.1: Map status from multiple possible fields (Veo3 vs Images)
     let status: 'processing' | 'ready' | 'failed';
     if (successFlag === 0 || state === 'PROCESSING') {
@@ -252,6 +264,8 @@ export const kieService = {
     } else {
       status = 'processing'; // Default to processing for unknown states
     }
+
+    console.log(`[KIE Status Check] ${provider} - successFlag=${successFlag}, state=${state}, status=${status}`);
 
     // Extract result URLs with robust fallback logic
     let resultUrls: string[] | undefined;
@@ -303,13 +317,29 @@ export const kieService = {
           urlCount: resultUrls.length,
           firstUrl: resultUrls[0] ? resultUrls[0].substring(0, 60) + '...' : 'none',
         });
+      } else if (provider.includes('flux-kontext')) {
+        console.log('[KIE Flux-Kontext ✅] URL extraction result:', {
+          taskId,
+          state,
+          successFlag,
+          status,
+          urlCount: resultUrls.length,
+          firstUrl: resultUrls[0] ? resultUrls[0].substring(0, 80) + '...' : 'none',
+        });
       } else {
         console.log('[KIE FIX ✅] Extracted resultUrls:', resultUrls);
       }
 
       if (!resultUrls || resultUrls.length === 0) {
         console.warn(`[KIE Service] ⚠️ No result URLs found in response for ${provider}!`);
-        console.log('[KIE Service] Raw response data:', JSON.stringify(rawData, null, 2));
+        console.log('[KIE Service] All checked paths:', {
+          'response.resultUrls': rawData.response?.resultUrls,
+          'resultJson.resultUrls': rawData.resultJson?.resultUrls,
+          'resultJson (type)': typeof rawData.resultJson,
+          'response.resultImageUrl': rawData.response?.resultImageUrl,
+          'metadata.response.resultUrls': rawData.metadata?.response?.resultUrls,
+        });
+        console.log('[KIE Service] Full raw response data:', JSON.stringify(rawData, null, 2));
       }
     }
 
