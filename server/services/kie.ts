@@ -60,9 +60,95 @@ export interface KIEStatusResult {
 }
 
 /**
+ * File upload result
+ */
+export interface KIEFileUploadResult {
+  fileUrl: string;
+  fileId?: string;
+}
+
+/**
  * KIE.ai Service
  */
 export const kieService = {
+  /**
+   * Upload file to KIE.ai and get public URL
+   * Use this to convert blob URLs or local files to publicly accessible URLs
+   */
+  async uploadFile(fileUrl: string): Promise<string> {
+    if (!KIE_API_KEY) {
+      throw new Error('KIE_API_KEY is not configured. Please add it to your .env file.');
+    }
+
+    // If already a public URL, return as-is
+    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+      if (!fileUrl.startsWith('blob:')) {
+        console.log('[KIE Upload] URL already public, skipping upload:', fileUrl.substring(0, 80) + '...');
+        return fileUrl;
+      }
+    }
+
+    console.log('[KIE Upload] Blob or local URL detected, fetching and uploading to KIE...');
+
+    try {
+      // Fetch the blob URL to get the actual file data
+      const fileResponse = await fetch(fileUrl);
+      if (!fileResponse.ok) {
+        throw new Error(`Failed to fetch blob URL: ${fileResponse.status}`);
+      }
+
+      const fileBlob = await fileResponse.blob();
+      const fileName = `upload-${Date.now()}.${fileBlob.type.split('/')[1] || 'jpg'}`;
+
+      console.log('[KIE Upload] File fetched, size:', fileBlob.size, 'bytes, type:', fileBlob.type);
+
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('file', fileBlob, fileName);
+
+      // Upload to KIE
+      const response = await fetch(`${KIE_BASE_URL}/api/v1/file/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${KIE_API_KEY}`,
+        },
+        body: formData,
+      });
+
+      const responseText = await response.text();
+      if (responseText.trim() === '') {
+        throw new Error(`KIE Upload API returned empty response (HTTP ${response.status})`);
+      }
+
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('[KIE Upload] JSON parse error:', parseError);
+        throw new Error(`KIE Upload API returned invalid JSON: ${responseText.substring(0, 200)}`);
+      }
+
+      if (data.code !== 200 && !data.success) {
+        console.error('[KIE Upload] API Error:', data);
+        throw new Error(`KIE Upload API Error: ${data.msg || data.message || 'Unknown error'}`);
+      }
+
+      // Extract public URL from response
+      const publicUrl = data.data?.fileUrl || data.data?.url || data.fileUrl || data.url;
+
+      if (!publicUrl) {
+        console.error('[KIE Upload] No URL in response:', data);
+        throw new Error('KIE Upload API did not return a file URL');
+      }
+
+      console.log('[KIE Upload] ✅ File uploaded successfully:', publicUrl.substring(0, 80) + '...');
+      return publicUrl;
+
+    } catch (error: any) {
+      console.error('[KIE Upload] ❌ File upload failed:', error);
+      throw new Error(`Failed to upload file to KIE: ${error.message}`);
+    }
+  },
   /**
    * Generate video using Veo3
    */
@@ -71,10 +157,29 @@ export const kieService = {
       throw new Error('KIE_API_KEY is not configured. Please add it to your .env file.');
     }
 
+    // ✅ FIX: Upload blob URLs to get public URLs before generating
+    let publicImageUrls: string[] | undefined;
+    if (params.imageUrls && params.imageUrls.length > 0) {
+      console.log('[KIE Service] Processing image URLs for Veo3...');
+      publicImageUrls = [];
+
+      for (const imageUrl of params.imageUrls) {
+        try {
+          const publicUrl = await this.uploadFile(imageUrl);
+          publicImageUrls.push(publicUrl);
+        } catch (error: any) {
+          console.error('[KIE Service] Failed to upload image, will try to use original URL:', error.message);
+          // Fallback to original URL if upload fails (in case it's already public)
+          publicImageUrls.push(imageUrl);
+        }
+      }
+    }
+
     console.log('[KIE Service] Generating video:', {
       prompt: params.prompt.substring(0, 50) + '...',
       model: params.model || 'veo3',
       aspectRatio: params.aspectRatio || '16:9',
+      imageUrls: publicImageUrls?.map(url => url.substring(0, 60) + '...'),
     });
 
     const response = await fetch(`${KIE_BASE_URL}/api/v1/veo/generate`, {
@@ -87,7 +192,7 @@ export const kieService = {
         prompt: params.prompt,
         model: params.model || 'veo3',
         aspectRatio: params.aspectRatio || '16:9',
-        ...(params.imageUrls && { imageUrls: params.imageUrls }),
+        ...(publicImageUrls && { imageUrls: publicImageUrls }),
       }),
     });
 
@@ -127,9 +232,22 @@ export const kieService = {
       throw new Error('KIE_API_KEY is not configured. Please add it to your .env file.');
     }
 
+    // ✅ FIX: Upload blob URLs to get public URLs before generating
+    let publicReferenceUrl: string | undefined;
+    if (params.referenceImageUrl) {
+      try {
+        console.log('[KIE Service] Processing reference image URL...');
+        publicReferenceUrl = await this.uploadFile(params.referenceImageUrl);
+      } catch (error: any) {
+        console.error('[KIE Service] Failed to upload reference image, will try original URL:', error.message);
+        publicReferenceUrl = params.referenceImageUrl; // Fallback to original
+      }
+    }
+
     console.log('[KIE Service] Generating image:', {
       prompt: params.prompt.substring(0, 50) + '...',
       provider: params.provider,
+      referenceImageUrl: publicReferenceUrl ? publicReferenceUrl.substring(0, 60) + '...' : undefined,
     });
 
     let endpoint: string;
@@ -142,7 +260,7 @@ export const kieService = {
         size: params.size || '1:1',
         nVariants: params.nVariants || 1,
         isEnhance: false,
-        ...(params.referenceImageUrl && { filesUrl: [params.referenceImageUrl] }),
+        ...(publicReferenceUrl && { filesUrl: [publicReferenceUrl] }),
       };
     } else {
       endpoint = `${KIE_BASE_URL}/api/v1/flux/kontext/generate`;
@@ -153,7 +271,7 @@ export const kieService = {
         outputFormat: 'png',
         enableTranslation: true,
         promptUpsampling: true,
-        ...(params.referenceImageUrl && { inputImage: params.referenceImageUrl }),
+        ...(publicReferenceUrl && { inputImage: publicReferenceUrl }),
       };
     }
 
