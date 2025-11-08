@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { WaveBackground } from "@/components/ui/wave-background";
 import { Card, CardContent } from "@/components/ui/card";
@@ -145,13 +145,17 @@ export default function AIStudioPage() {
         formData.append('productImageUrl', params.productImageUrl);
       }
 
-      // Send as multipart/form-data (don't set Content-Type, browser will set it with boundary)
+      // Get auth headers from Supabase session
+      const authHeaders = await getAuthHeaders();
+
+      // Send as multipart/form-data
+      // Note: Don't set Content-Type - browser sets it automatically with boundary
       const response = await fetch('/api/ai/generate-ugc-preset', {
         method: 'POST',
         headers: {
-          // Note: Don't set Content-Type for FormData - browser sets it automatically with boundary
+          ...authHeaders, // ✅ Include Authorization: Bearer <token>
         },
-        credentials: 'include',
+        credentials: 'include', // ✅ Include cookies for session-based auth
         body: formData,
       });
 
