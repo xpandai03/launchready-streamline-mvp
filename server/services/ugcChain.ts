@@ -92,9 +92,10 @@ export const ugcChainService = {
         },
       });
 
-      console.log(`[UGC Chain] Step 1 complete: NanoBanana task ${result.taskId} started`);
+      console.log(`[UGC Chain] ✅ Step 1 complete: NanoBanana task ${result.taskId} started`);
+      console.log(`[UGC Chain] Asset ${assetId} now in state: step=generating_image, taskId=${result.taskId}`);
     } catch (error: any) {
-      console.error(`[UGC Chain] Step 1 failed:`, error);
+      console.error(`[UGC Chain] ❌ Step 1 failed:`, error);
       await this.handleChainError(assetId, 'generating_image', error.message);
       throw error;
     }
@@ -114,19 +115,22 @@ export const ugcChainService = {
       return false; // Not in image generation step
     }
 
-    console.log(`[UGC Chain] Step 2: Checking NanoBanana image status for ${asset.taskId}`);
+    console.log(`[UGC Chain] Step 2: Checking NanoBanana image status for taskId=${asset.taskId}`);
 
     try {
       const status = await kieService.checkStatus(asset.taskId, 'kie-flux-kontext');
+      console.log(`[UGC Chain] Step 2: KIE status response: status=${status.status}, resultUrls count=${status.resultUrls?.length || 0}`);
 
       if (status.status === 'failed') {
+        console.error(`[UGC Chain] ❌ Step 2: Image generation failed: ${status.errorMessage}`);
         await this.handleChainError(assetId, 'generating_image', status.errorMessage || 'Image generation failed');
         return false;
       }
 
       if (status.status === 'ready' && status.resultUrls && status.resultUrls.length > 0) {
         const imageUrl = status.resultUrls[0];
-        console.log(`[UGC Chain] Step 2 complete: NanoBanana image ready at ${imageUrl.substring(0, 60)}...`);
+        console.log(`[UGC Chain] ✅ Step 2 complete: NanoBanana image ready`);
+        console.log(`[UGC Chain] Image URL: ${imageUrl.substring(0, 80)}...`);
 
         // Move to Step 3: Analyze image
         await this.analyzeImage(assetId, imageUrl);
@@ -134,9 +138,10 @@ export const ugcChainService = {
       }
 
       // Still processing
+      console.log(`[UGC Chain] Step 2: Image still processing, will retry...`);
       return false;
     } catch (error: any) {
-      console.error(`[UGC Chain] Step 2 error:`, error);
+      console.error(`[UGC Chain] ❌ Step 2 error:`, error);
       await this.handleChainError(assetId, 'generating_image', error.message);
       return false;
     }
@@ -146,7 +151,8 @@ export const ugcChainService = {
    * Step 3: Analyze image with OpenAI Vision and generate video prompt
    */
   async analyzeImage(assetId: string, imageUrl: string): Promise<void> {
-    console.log(`[UGC Chain] Step 3: Analyzing image with OpenAI Vision for asset ${assetId}`);
+    console.log(`[UGC Chain] Step 3: Starting image analysis with OpenAI Vision`);
+    console.log(`[UGC Chain] Asset ID: ${assetId}, Image URL: ${imageUrl.substring(0, 80)}...`);
 
     try {
       const asset = await storage.getMediaAsset(assetId);
@@ -169,6 +175,7 @@ export const ugcChainService = {
       await storage.updateMediaAsset(assetId, {
         chainMetadata,
       });
+      console.log(`[UGC Chain] Step 3: Updated asset state to analyzing_image`);
 
       // Analyze image with Vision API
       const analysisPrompt = `Analyze this UGC-style product photo in detail. Describe:
@@ -180,13 +187,15 @@ export const ugcChainService = {
 
 Be specific and detailed - this description will be used to create a video based on this image.`;
 
+      console.log(`[UGC Chain] Step 3: Calling OpenAI Vision API...`);
       const imageAnalysis = await openaiService.analyzeImage({
         imageUrl,
         prompt: analysisPrompt,
         maxTokens: 500,
       });
 
-      console.log(`[UGC Chain] Image analysis complete (${imageAnalysis.length} chars):`, imageAnalysis.substring(0, 100) + '...');
+      console.log(`[UGC Chain] ✅ Step 3: Image analysis complete (${imageAnalysis.length} chars)`);
+      console.log(`[UGC Chain] Analysis preview: ${imageAnalysis.substring(0, 100)}...`);
 
       // Generate Veo3 video prompt using chained template
       const videoPrompt = generatePrompt(
@@ -211,12 +220,12 @@ Be specific and detailed - this description will be used to create a video based
         },
       });
 
-      console.log(`[UGC Chain] Step 3 complete: Image analyzed, moving to Step 4`);
+      console.log(`[UGC Chain] ✅ Step 3 complete: Image analyzed, proceeding to Step 4 (video generation)`);
 
       // Move to Step 4: Generate video
       await this.startVideoGeneration(assetId, videoPrompt, imageUrl);
     } catch (error: any) {
-      console.error(`[UGC Chain] Step 3 failed:`, error);
+      console.error(`[UGC Chain] ❌ Step 3 failed:`, error);
       await this.handleChainError(assetId, 'analyzing_image', error.message);
       throw error;
     }
@@ -226,10 +235,14 @@ Be specific and detailed - this description will be used to create a video based
    * Step 4: Start Veo3 video generation with analyzed image as reference
    */
   async startVideoGeneration(assetId: string, videoPrompt: string, imageUrl: string): Promise<void> {
-    console.log(`[UGC Chain] Step 4: Starting Veo3 video generation for asset ${assetId}`);
+    console.log(`[UGC Chain] Step 4: Starting Veo3 video generation`);
+    console.log(`[UGC Chain] Asset ID: ${assetId}`);
+    console.log(`[UGC Chain] Video prompt length: ${videoPrompt.length} chars`);
+    console.log(`[UGC Chain] Reference image: ${imageUrl.substring(0, 80)}...`);
 
     try {
       // Submit to KIE Veo3 with image as reference
+      console.log(`[UGC Chain] Step 4: Submitting to KIE Veo3 API...`);
       const result = await kieService.generateVideo({
         prompt: videoPrompt,
         model: 'veo3',
@@ -256,9 +269,10 @@ Be specific and detailed - this description will be used to create a video based
         chainMetadata,
       });
 
-      console.log(`[UGC Chain] Step 4 complete: Veo3 task ${result.taskId} started`);
+      console.log(`[UGC Chain] ✅ Step 4 complete: Veo3 task ${result.taskId} started`);
+      console.log(`[UGC Chain] Asset ${assetId} now in state: step=generating_video, videoTaskId=${result.taskId}`);
     } catch (error: any) {
-      console.error(`[UGC Chain] Step 4 failed:`, error);
+      console.error(`[UGC Chain] ❌ Step 4 failed:`, error);
       await this.handleChainError(assetId, 'generating_video', error.message);
       throw error;
     }
@@ -278,19 +292,22 @@ Be specific and detailed - this description will be used to create a video based
       return false; // Not in video generation step
     }
 
-    console.log(`[UGC Chain] Step 5: Checking Veo3 video status for ${asset.taskId}`);
+    console.log(`[UGC Chain] Step 5: Checking Veo3 video status for taskId=${asset.taskId}`);
 
     try {
       const status = await kieService.checkStatus(asset.taskId, 'kie-veo3');
+      console.log(`[UGC Chain] Step 5: KIE status response: status=${status.status}, resultUrls count=${status.resultUrls?.length || 0}`);
 
       if (status.status === 'failed') {
+        console.error(`[UGC Chain] ❌ Step 5: Video generation failed: ${status.errorMessage}`);
         await this.handleChainError(assetId, 'generating_video', status.errorMessage || 'Video generation failed');
         return false;
       }
 
       if (status.status === 'ready' && status.resultUrls && status.resultUrls.length > 0) {
         const videoUrl = status.resultUrls[0];
-        console.log(`[UGC Chain] Step 5 complete: Veo3 video ready at ${videoUrl.substring(0, 60)}...`);
+        console.log(`[UGC Chain] ✅ Step 5 complete: Veo3 video ready!`);
+        console.log(`[UGC Chain] Video URL: ${videoUrl.substring(0, 80)}...`);
 
         // Mark chain as completed
         chainMetadata.step = 'completed';
@@ -305,14 +322,16 @@ Be specific and detailed - this description will be used to create a video based
           apiResponse: { veo3: status },
         });
 
-        console.log(`[UGC Chain] 🎉 Chain workflow complete for asset ${assetId}!`);
+        console.log(`[UGC Chain] 🎉 CHAIN WORKFLOW COMPLETE for asset ${assetId}!`);
+        console.log(`[UGC Chain] Total chain time: ${this.getChainDuration(chainMetadata)}`);
         return true;
       }
 
       // Still processing
+      console.log(`[UGC Chain] Step 5: Video still processing, will retry...`);
       return false;
     } catch (error: any) {
-      console.error(`[UGC Chain] Step 5 error:`, error);
+      console.error(`[UGC Chain] ❌ Step 5 error:`, error);
       await this.handleChainError(assetId, 'generating_video', error.message);
       return false;
     }
@@ -344,5 +363,21 @@ Be specific and detailed - this description will be used to create a video based
     } catch (updateError) {
       console.error(`[UGC Chain] Failed to update error state:`, updateError);
     }
+  },
+
+  /**
+   * Helper: Calculate chain duration from timestamps
+   */
+  getChainDuration(chainMetadata: ChainMetadata): string {
+    const start = chainMetadata.timestamps?.imageStarted;
+    const end = chainMetadata.timestamps?.videoCompleted;
+
+    if (!start || !end) return 'Unknown';
+
+    const durationMs = new Date(end).getTime() - new Date(start).getTime();
+    const minutes = Math.floor(durationMs / 60000);
+    const seconds = Math.floor((durationMs % 60000) / 1000);
+
+    return `${minutes}m ${seconds}s`;
   },
 };

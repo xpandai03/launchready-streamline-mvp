@@ -1584,6 +1584,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           assetId,
           promptVariables,
           productImageUrl,
+        }).then(() => {
+          // Start polling loop after image generation task is submitted
+          console.log('[AI UGC Preset] Starting chain polling workflow for asset:', assetId);
+          processChainWorkflow(assetId).catch((error) => {
+            console.error('[AI UGC Chain] Polling workflow error:', error);
+          });
         }).catch((error) => {
           console.error('[AI UGC Chain] Background chain error:', error);
         });
