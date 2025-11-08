@@ -281,6 +281,52 @@ export function getSystemRole(mode: GenerationMode): string {
   }
 }
 
+/**
+ * Convert ICP dropdown value to human-readable text for prompts
+ * Examples:
+ * - "fitness-enthusiast-20s-30s" → "Fitness enthusiast in their 20s-30s"
+ * - "busy-professional-25-40" → "Busy professional in their 25-40"
+ */
+export function formatICPForPrompt(value: string): string {
+  // Map of ICP values to formatted text
+  const icpMap: Record<string, string> = {
+    "fitness-enthusiast-20s-30s": "Fitness enthusiast in their 20s-30s",
+    "busy-professional-25-40": "Busy professional in their 25-40",
+    "health-conscious-parent-30s-40s": "Health-conscious parent in their 30s-40s",
+    "wellness-influencer-20s-30s": "Wellness influencer in their 20s-30s",
+    "college-student-18-25": "College student in their 18-25",
+    "beauty-skincare-enthusiast-20s-40s": "Beauty & skincare enthusiast in their 20s-40s",
+    "tech-savvy-millennial-25-35": "Tech-savvy millennial in their 25-35",
+    "outdoor-adventurer-20s-40s": "Outdoor adventurer in their 20s-40s",
+  };
+
+  return icpMap[value] || value;
+}
+
+/**
+ * Convert scene dropdown value to descriptive text for prompts
+ * Examples:
+ * - "modern-gym" → "Modern gym with weights, mirrors, and fitness equipment in background"
+ * - "kitchen-counter" → "Kitchen counter with bright, clean kitchen with natural lighting"
+ */
+export function formatSceneForPrompt(value: string): string {
+  // Map of scene values to formatted text
+  const sceneMap: Record<string, string> = {
+    "modern-gym": "Modern gym with weights, mirrors, and fitness equipment in background",
+    "kitchen-counter": "Kitchen counter with bright, clean kitchen with natural lighting",
+    "office-desk": "Office desk with professional workspace with laptop and coffee",
+    "outdoor-park": "Outdoor park with natural scenery with trees and greenery",
+    "cozy-living-room": "Cozy living room with comfortable home setting with soft lighting",
+    "bathroom-mirror": "Bathroom mirror with bright bathroom ideal for skincare/beauty products",
+    "coffee-shop": "Coffee shop with casual café environment with warm ambiance",
+    "bedroom-morning": "Bedroom (morning) with relaxed morning routine setting with natural light",
+    "car-interior": "Car interior (inside vehicle, great for on-the-go products)",
+    "yoga-studio": "Yoga studio with calm, minimalist space with mats and props",
+  };
+
+  return sceneMap[value] || value;
+}
+
 // ==================== EXPORTS ====================
 
 export default {
@@ -294,4 +340,6 @@ export default {
   injectImageAnalysis,
   generatePrompt,
   getSystemRole,
+  formatICPForPrompt,
+  formatSceneForPrompt,
 };
