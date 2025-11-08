@@ -256,16 +256,20 @@ export const kieService = {
     // Extract result URLs with robust fallback logic
     let resultUrls: string[] | undefined;
     if (status === 'ready') {
-      // ✅ PHASE 4.7.1: Check ALL possible KIE response paths including Veo3-specific paths
+      // ✅ PHASE 4.7.1: Check ALL possible KIE response paths (based on n8n workflow analysis)
+      // Priority order verified from UGC Ads Veo & Sora.json n8n template:
+      //  - Veo3 videos: data.response.resultUrls (lines 411, 1008)
+      //  - Sora videos: JSON.parse(data.resultJson).resultUrls (line 681)
+      //  - NanoBanana images: JSON.parse(data.resultJson).resultUrls (line 229)
       let urls: any[] =
-        rawData.resultJson?.resultUrls ||          // ✅ Veo3 PRIMARY path
-        rawData.response?.resultUrls ||            // Images primary path (4o-image, flux)
+        rawData.response?.resultUrls ||            // ✅ Veo3 PRIMARY path (videos)
+        rawData.resultJson?.resultUrls ||          // Sora/NanoBanana path (may be JSON string)
         rawData.metadata?.response?.resultUrls ||  // Nested metadata path
         rawData.response?.result_urls ||           // Snake_case variant
         rawData.metadata?.resultUrls ||            // Direct metadata path
         rawData.resultUrls ||                      // Direct path
-        (rawData.resultJson?.resultUrl ? [rawData.resultJson.resultUrl] : []) || // Veo3 single URL
-        (rawData.response?.resultUrl ? [rawData.response.resultUrl] : []) ||  // Single URL variant
+        (rawData.resultJson?.resultUrl ? [rawData.resultJson.resultUrl] : []) || // Single URL (Sora)
+        (rawData.response?.resultUrl ? [rawData.response.resultUrl] : []) ||  // Single URL (Veo3)
         (rawData.response?.resultImageUrl ? [rawData.response.resultImageUrl] : []) || // Flux kontext
         rawData.outputs?.map((o: any) => o.url).filter(Boolean) ||
         rawData.outputFiles?.filter(Boolean) ||
@@ -276,6 +280,16 @@ export const kieService = {
         (rawData.resultUrl ? [rawData.resultUrl] : []) ||
         (rawData.url ? [rawData.url] : []) ||
         [];
+
+      // ✅ Handle case where resultJson is a JSON string (Sora/NanoBanana)
+      if ((!urls || urls.length === 0) && typeof rawData.resultJson === 'string') {
+        try {
+          const parsed = JSON.parse(rawData.resultJson);
+          urls = parsed.resultUrls || [];
+        } catch (e) {
+          // resultJson not a valid JSON string, continue with fallbacks
+        }
+      }
 
       resultUrls = urls.filter(Boolean); // Remove null/undefined
 
