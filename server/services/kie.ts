@@ -278,24 +278,41 @@ export const kieService = {
     let requestBody: any;
 
     if (isSora) {
-      // Sora2 endpoint (based on KIE API pattern)
-      endpoint = publicImageUrls && publicImageUrls.length > 0
-        ? `${KIE_BASE_URL}/api/v1/sora2/image-to-video/generate`
-        : `${KIE_BASE_URL}/api/v1/sora2/text-to-video/generate`;
+      // Sora2 uses unified jobs endpoint
+      endpoint = `${KIE_BASE_URL}/api/v1/jobs/createTask`;
+
+      // Convert aspect ratio to portrait/landscape
+      const aspectRatioValue = params.aspectRatio === '9:16' ? 'portrait' : 'landscape';
+
+      // Convert duration from "10s" to "10"
+      const durationValue = (params.duration || '10s').replace('s', '');
+
+      // Determine which Sora2 model to use
+      const soraModel = publicImageUrls && publicImageUrls.length > 0
+        ? 'sora-2-image-to-video'  // Image-to-video
+        : 'sora-2-text-to-video';  // Text-to-video
+
+      // Build shots array (single scene for UGC ads)
+      const shots = [{
+        Scene: params.prompt,
+        duration: parseInt(durationValue)
+      }];
 
       requestBody = {
-        prompt: params.prompt,
-        aspect_ratio: params.aspectRatio || '16:9',
-        n_frames: params.duration || '10s',
-        remove_watermark: params.removeWatermark ?? false,
-        ...(publicImageUrls && publicImageUrls.length > 0 && { image_urls: publicImageUrls }),
+        model: soraModel,
+        input: {
+          n_frames: durationValue,
+          aspect_ratio: aspectRatioValue,
+          shots: shots,
+          ...(publicImageUrls && publicImageUrls.length > 0 && { image_urls: publicImageUrls }),
+        }
       };
 
       console.log('[KIE Service] Generating Sora2 video:', {
+        model: soraModel,
         prompt: params.prompt.substring(0, 50) + '...',
-        model,
-        aspectRatio: params.aspectRatio || '16:9',
-        duration: params.duration || '10s',
+        aspectRatio: aspectRatioValue,
+        duration: durationValue + 's',
         imageUrls: publicImageUrls?.map(url => url.substring(0, 60) + '...'),
       });
     } else {
@@ -451,8 +468,9 @@ export const kieService = {
 
     let endpoint: string;
 
-    if (provider.includes('sora2')) {
-      endpoint = `${KIE_BASE_URL}/api/v1/sora2/record-info?taskId=${taskId}`;
+    if (provider.includes('sora2') || provider.includes('sora-2')) {
+      // Sora2 uses unified jobs query endpoint
+      endpoint = `${KIE_BASE_URL}/api/v1/jobs/queryTask?taskId=${taskId}`;
     } else if (provider.includes('veo3')) {
       endpoint = `${KIE_BASE_URL}/api/v1/veo/record-info?taskId=${taskId}`;
     } else if (provider.includes('4o-image')) {
@@ -517,19 +535,32 @@ export const kieService = {
       });
     }
 
-    // ✅ PHASE 4.7.1: Map status from multiple possible fields (Veo3 vs Images)
+    // ✅ DEBUG: Log raw response for Sora2 to diagnose status/URL issues
+    if (provider.includes('sora')) {
+      console.log('[KIE Sora2 Debug] Raw response:', JSON.stringify(rawData, null, 2));
+      console.log('[KIE Sora2 Debug] Fields:', {
+        state,
+        hasResultJson: !!rawData.resultJson,
+        resultJsonType: typeof rawData.resultJson,
+        failCode: rawData.failCode,
+        failMsg: rawData.failMsg,
+      });
+    }
+
+    // ✅ PHASE 4.7.1: Map status from multiple possible fields (Veo3 vs Images vs Sora2)
     // successFlag values observed:
     //   0 = processing (initial state)
     //   1 = success/ready
     //   2 = failed
     //   3 = processing/transcoding (Veo3 specific - video being generated)
     //  -1 = failed/error
+    // Sora2 state values: "success", "fail", or undefined (processing)
     let status: 'processing' | 'ready' | 'failed';
-    if (successFlag === 0 || successFlag === 3 || state === 'PROCESSING') {
-      status = 'processing'; // ✅ FIX: successFlag=3 is also a processing state
-    } else if (successFlag === 1 || state === 'SUCCESS') {
+    if (successFlag === 0 || successFlag === 3 || state === 'PROCESSING' || (provider.includes('sora') && !state)) {
+      status = 'processing'; // ✅ FIX: successFlag=3 is also a processing state, Sora2 undefined state = processing
+    } else if (successFlag === 1 || state === 'SUCCESS' || state === 'success') {
       status = 'ready';
-    } else if (state === 'FAILED' || successFlag === -1 || successFlag === 2) {
+    } else if (state === 'FAILED' || state === 'fail' || successFlag === -1 || successFlag === 2) {
       status = 'failed';
     } else {
       // Unknown state - log warning and default to processing
