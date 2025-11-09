@@ -2,12 +2,13 @@
  * Image Upload Field Component
  *
  * Hybrid input that supports both:
- * 1. Drag-and-drop or click-to-upload local files (JPG/PNG)
+ * 1. Drag-and-drop or click-to-upload local files (JPG/PNG/HEIC)
  * 2. Manual URL paste for remote images
  *
  * Features:
  * - Live thumbnail preview
  * - File validation (type and size)
+ * - HEIC to JPEG conversion (automatic for iPhone photos)
  * - Accessible keyboard navigation
  * - Drag-and-drop visual feedback
  */
@@ -16,6 +17,7 @@ import { useState, useRef, DragEvent, ChangeEvent } from 'react';
 import { Upload, Image as ImageIcon, X } from 'lucide-react';
 import { Input } from './input';
 import { Label } from './label';
+import heic2any from 'heic2any';
 
 interface ImageUploadFieldProps {
   value: string;
@@ -39,14 +41,15 @@ export function ImageUploadField({
   const [previewUrl, setPreviewUrl] = useState<string>(value);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string>("");
+  const [isConverting, setIsConverting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // File validation
   const validateFile = (file: File): string | null => {
-    // Check file type
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    // Check file type (includes HEIC for iPhone photos)
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif'];
     if (!validTypes.includes(file.type)) {
-      return 'Please upload a JPG or PNG image';
+      return 'Please upload a JPG, PNG, or HEIC image';
     }
 
     // Check file size
@@ -58,8 +61,8 @@ export function ImageUploadField({
     return null;
   };
 
-  // Handle file upload
-  const handleFileUpload = (file: File) => {
+  // Handle file upload (with HEIC conversion)
+  const handleFileUpload = async (file: File) => {
     setError("");
 
     // Validate file
@@ -69,14 +72,54 @@ export function ImageUploadField({
       return;
     }
 
+    let processedFile = file;
+
+    // Convert HEIC to JPEG for compatibility
+    if (file.type === 'image/heic' || file.type === 'image/heif') {
+      console.log('[ImageUpload] HEIC file detected, converting to JPEG...');
+      setIsConverting(true);
+
+      try {
+        const convertedBlob = await heic2any({
+          blob: file,
+          toType: 'image/jpeg',
+          quality: 0.9, // High quality conversion
+        });
+
+        // heic2any can return Blob or Blob[], handle both
+        const finalBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+
+        // Create new File object with JPEG extension
+        const newFileName = file.name.replace(/\.heic$/i, '.jpg');
+        processedFile = new File([finalBlob], newFileName, {
+          type: 'image/jpeg',
+          lastModified: Date.now(),
+        });
+
+        console.log('[ImageUpload] ✅ HEIC converted to JPEG:', {
+          original: file.name,
+          converted: newFileName,
+          originalSize: file.size,
+          convertedSize: processedFile.size,
+        });
+      } catch (conversionError) {
+        console.error('[ImageUpload] HEIC conversion failed:', conversionError);
+        setError('Failed to convert iPhone photo. Please try a different image.');
+        setIsConverting(false);
+        return;
+      } finally {
+        setIsConverting(false);
+      }
+    }
+
     // Create blob URL for preview (display only)
-    const blobUrl = URL.createObjectURL(file);
+    const blobUrl = URL.createObjectURL(processedFile);
     setPreviewUrl(blobUrl);
     onChange(blobUrl); // For backward compatibility - preview URL
 
     // Pass actual File object to parent for upload
     if (onFileChange) {
-      onFileChange(file);
+      onFileChange(processedFile);
     }
   };
 
@@ -173,7 +216,7 @@ export function ImageUploadField({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/png, image/jpeg, image/jpg"
+          accept="image/png, image/jpeg, image/jpg, image/heic, image/heif"
           className="hidden"
           onChange={handleFileInputChange}
         />
@@ -188,10 +231,10 @@ export function ImageUploadField({
 
           <div>
             <p className={`text-sm font-medium ${isDragging ? 'text-blue-400' : 'text-white/90'}`}>
-              {isDragging ? 'Drop image here' : 'Click to upload or drag and drop'}
+              {isConverting ? 'Converting iPhone photo...' : isDragging ? 'Drop image here' : 'Click to upload or drag and drop'}
             </p>
             <p className="text-xs text-white/50 mt-1">
-              JPG, JPEG or PNG (max {maxSizeMB}MB)
+              JPG, PNG or HEIC (max {maxSizeMB}MB) • iPhone photos supported
             </p>
           </div>
         </div>
