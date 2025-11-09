@@ -465,9 +465,9 @@ export const kieService = {
     let endpoint: string;
 
     if (provider.includes('sora2') || provider.includes('sora-2')) {
-      // Sora2 uses unified jobs query endpoint (POST method, not GET)
-      // Try /query instead of /queryTask (queryTask returned 404)
-      endpoint = `${KIE_BASE_URL}/api/v1/jobs/query`;
+      // Sora2 uses unified jobs API - try RESTful pattern
+      // Both /queryTask and /query returned 404, trying /{taskId}
+      endpoint = `${KIE_BASE_URL}/api/v1/jobs/${taskId}`;
     } else if (provider.includes('veo3')) {
       endpoint = `${KIE_BASE_URL}/api/v1/veo/record-info?taskId=${taskId}`;
     } else if (provider.includes('4o-image')) {
@@ -478,23 +478,19 @@ export const kieService = {
       throw new Error(`Unknown provider: ${provider}`);
     }
 
-    // Sora2 uses POST, others use GET
-    const isSoraQuery = provider.includes('sora');
-
+    // All status checks use GET (RESTful pattern for Sora2)
     console.log(`[KIE Service] Checking status:`, {
       provider,
       taskId,
-      method: isSoraQuery ? 'POST' : 'GET',
+      method: 'GET',
       endpoint,
     });
 
     const response = await fetch(endpoint, {
-      method: isSoraQuery ? 'POST' : 'GET',
+      method: 'GET',
       headers: {
         'Authorization': `Bearer ${KIE_API_KEY}`,
-        ...(isSoraQuery && { 'Content-Type': 'application/json' }),
       },
-      ...(isSoraQuery && { body: JSON.stringify({ taskId }) }),
     });
 
     const responseText = await response.text();
