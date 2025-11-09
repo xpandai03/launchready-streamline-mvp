@@ -21,13 +21,15 @@ if (!KIE_API_KEY) {
 }
 
 /**
- * Parameters for Veo3 video generation
+ * Parameters for video generation (Veo3 or Sora2)
  */
 export interface GenerateVideoParams {
   prompt: string;
-  model?: 'veo3' | 'veo3_fast';
+  model?: 'veo3' | 'veo3_fast' | 'sora2' | 'sora2-pro';
   aspectRatio?: string; // Default: '16:9'
   imageUrls?: string[]; // Optional image-to-video
+  duration?: '10s' | '15s' | '25s'; // Sora2 duration (Pro supports 25s)
+  removeWatermark?: boolean; // Sora2 watermark removal
 }
 
 /**
@@ -243,17 +245,20 @@ export const kieService = {
   },
 
   /**
-   * Generate video using Veo3
+   * Generate video using Veo3 or Sora2
    */
   async generateVideo(params: GenerateVideoParams): Promise<KIEGenerationResult> {
     if (!KIE_API_KEY) {
       throw new Error('KIE_API_KEY is not configured. Please add it to your .env file.');
     }
 
+    const model = params.model || 'veo3';
+    const isSora = model.startsWith('sora');
+
     // ✅ FIX: Upload blob URLs to get public URLs before generating
     let publicImageUrls: string[] | undefined;
     if (params.imageUrls && params.imageUrls.length > 0) {
-      console.log('[KIE Service] Processing image URLs for Veo3...');
+      console.log(`[KIE Service] Processing image URLs for ${model}...`);
       publicImageUrls = [];
 
       for (const imageUrl of params.imageUrls) {
@@ -268,25 +273,57 @@ export const kieService = {
       }
     }
 
-    console.log('[KIE Service] Generating video:', {
-      prompt: params.prompt.substring(0, 50) + '...',
-      model: params.model || 'veo3',
-      aspectRatio: params.aspectRatio || '16:9',
-      imageUrls: publicImageUrls?.map(url => url.substring(0, 60) + '...'),
-    });
+    // Determine endpoint and request body based on model
+    let endpoint: string;
+    let requestBody: any;
 
-    const response = await fetch(`${KIE_BASE_URL}/api/v1/veo/generate`, {
+    if (isSora) {
+      // Sora2 endpoint (based on KIE API pattern)
+      endpoint = publicImageUrls && publicImageUrls.length > 0
+        ? `${KIE_BASE_URL}/api/v1/sora2/image-to-video/generate`
+        : `${KIE_BASE_URL}/api/v1/sora2/text-to-video/generate`;
+
+      requestBody = {
+        prompt: params.prompt,
+        aspect_ratio: params.aspectRatio || '16:9',
+        n_frames: params.duration || '10s',
+        remove_watermark: params.removeWatermark ?? false,
+        ...(publicImageUrls && publicImageUrls.length > 0 && { image_urls: publicImageUrls }),
+      };
+
+      console.log('[KIE Service] Generating Sora2 video:', {
+        prompt: params.prompt.substring(0, 50) + '...',
+        model,
+        aspectRatio: params.aspectRatio || '16:9',
+        duration: params.duration || '10s',
+        imageUrls: publicImageUrls?.map(url => url.substring(0, 60) + '...'),
+      });
+    } else {
+      // Veo3 endpoint (existing)
+      endpoint = `${KIE_BASE_URL}/api/v1/veo/generate`;
+
+      requestBody = {
+        prompt: params.prompt,
+        model: model,
+        aspectRatio: params.aspectRatio || '16:9',
+        ...(publicImageUrls && { imageUrls: publicImageUrls }),
+      };
+
+      console.log('[KIE Service] Generating Veo3 video:', {
+        prompt: params.prompt.substring(0, 50) + '...',
+        model,
+        aspectRatio: params.aspectRatio || '16:9',
+        imageUrls: publicImageUrls?.map(url => url.substring(0, 60) + '...'),
+      });
+    }
+
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${KIE_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        prompt: params.prompt,
-        model: params.model || 'veo3',
-        aspectRatio: params.aspectRatio || '16:9',
-        ...(publicImageUrls && { imageUrls: publicImageUrls }),
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     // Safe JSON parsing (following existing pattern)
@@ -308,11 +345,11 @@ export const kieService = {
       throw new Error(`KIE API Error: ${data.msg || 'Unknown error'}`);
     }
 
-    console.log('[KIE Service] Video generation started:', data.data.taskId);
+    console.log(`[KIE Service] ${isSora ? 'Sora2' : 'Veo3'} video generation started:`, data.data.taskId);
 
     return {
       taskId: data.data.taskId,
-      provider: 'kie-veo3',
+      provider: isSora ? 'kie-sora2' : 'kie-veo3',
       type: 'video',
     };
   },
@@ -414,7 +451,9 @@ export const kieService = {
 
     let endpoint: string;
 
-    if (provider.includes('veo3')) {
+    if (provider.includes('sora2')) {
+      endpoint = `${KIE_BASE_URL}/api/v1/sora2/record-info?taskId=${taskId}`;
+    } else if (provider.includes('veo3')) {
       endpoint = `${KIE_BASE_URL}/api/v1/veo/record-info?taskId=${taskId}`;
     } else if (provider.includes('4o-image')) {
       endpoint = `${KIE_BASE_URL}/api/v1/gpt4o-image/record-info?taskId=${taskId}`;

@@ -50,21 +50,26 @@ export async function generateMedia(params: GenerateMediaParams): Promise<MediaG
 
   try {
     if (params.type === 'video') {
-      // Video generation - KIE Veo3 only
-      if (params.provider !== 'kie-veo3') {
-        throw new Error('Only kie-veo3 provider supports video generation');
+      // Video generation - KIE Veo3 or Sora2
+      if (params.provider !== 'kie-veo3' && params.provider !== 'sora2') {
+        throw new Error('Only kie-veo3 and sora2 providers support video generation');
       }
+
+      // Determine model based on provider
+      const model = params.provider === 'sora2' ? 'sora2' : 'veo3';
 
       const result = await kieService.generateVideo({
         prompt: params.prompt,
-        model: 'veo3',
-        aspectRatio: params.options?.aspectRatio || '16:9',
+        model: model as any,
+        aspectRatio: params.options?.aspectRatio || '9:16', // Default to vertical for UGC
         imageUrls: params.referenceImageUrl ? [params.referenceImageUrl] : undefined,
+        duration: '10s', // Sora2 default duration
+        removeWatermark: true, // Remove watermark for cleaner UGC ads
       });
 
       return {
         taskId: result.taskId,
-        provider: params.provider,
+        provider: result.provider, // Use provider returned from KIE service
         type: params.type,
         status: 'processing',
       };
