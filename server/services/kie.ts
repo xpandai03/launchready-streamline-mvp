@@ -479,6 +479,14 @@ export const kieService = {
 
     // Sora2 uses POST, others use GET
     const isSoraQuery = provider.includes('sora');
+
+    console.log(`[KIE Service] Checking status:`, {
+      provider,
+      taskId,
+      method: isSoraQuery ? 'POST' : 'GET',
+      endpoint,
+    });
+
     const response = await fetch(endpoint, {
       method: isSoraQuery ? 'POST' : 'GET',
       headers: {
@@ -502,7 +510,9 @@ export const kieService = {
     }
 
     if (data.code !== 200) {
-      throw new Error(`KIE API Error: ${data.msg || 'Unknown error'}`);
+      console.error(`[KIE Service] ❌ API Error Response:`, JSON.stringify(data, null, 2));
+      console.error(`[KIE Service] Provider: ${provider}, TaskId: ${taskId}`);
+      throw new Error(`KIE API Error (${data.code}): ${data.msg || data.message || 'Unknown error'}`);
     }
 
     const rawData = data.data;
