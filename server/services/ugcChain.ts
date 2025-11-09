@@ -379,7 +379,7 @@ Be specific and detailed - this description will be used to create a video based
           status: 'ready',
           resultUrl: videoUrl,
           resultUrls: status.resultUrls,
-          completedAt: new Date().toISOString(),
+          completedAt: new Date(), // Date object, not string
           chainMetadata,
           apiResponse: { veo3: status },
         });
