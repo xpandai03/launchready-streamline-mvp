@@ -2277,6 +2277,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
+      // Skip polling for Sora2 (uses webhook callbacks instead)
+      if (params.provider === 'sora2' || generationResult.provider === 'kie-sora2') {
+        console.log('[Media Generation] Sora2 uses webhooks - skipping polling. Will receive callback at completion.');
+        console.log('[Media Generation] Task submitted:', {
+          assetId,
+          taskId: generationResult.taskId,
+          provider: generationResult.provider,
+          note: 'Waiting for callback to /api/kie/sora2/callback'
+        });
+        return; // Exit - webhook will update the asset
+      }
+
       // Step 2: Poll for completion (async providers like KIE)
       let pollAttempts = 0;
 
