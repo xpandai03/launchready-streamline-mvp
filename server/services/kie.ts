@@ -294,8 +294,13 @@ export const kieService = {
 
       // Build request body based on model type
       // Note: Storyboard uses 'shots', but regular models use 'prompt'
+      // Construct callback URL for production (Render deployment)
+      const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:5000';
+      const callBackUrl = `${baseUrl}/api/kie/sora2/callback`;
+
       requestBody = {
         model: soraModel,
+        callBackUrl,  // Include callback URL for async updates
         input: {
           prompt: params.prompt,  // Add prompt field for non-Storyboard models
           n_frames: durationValue,
@@ -309,6 +314,7 @@ export const kieService = {
         prompt: params.prompt.substring(0, 50) + '...',
         aspectRatio: aspectRatioValue,
         duration: durationValue + 's',
+        callBackUrl,
         imageUrls: publicImageUrls?.map(url => url.substring(0, 60) + '...'),
       });
     } else {

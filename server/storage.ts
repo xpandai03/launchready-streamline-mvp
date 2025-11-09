@@ -278,6 +278,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(mediaAssets.userId, userId))
       .orderBy(desc(mediaAssets.createdAt));
   }
+
+  async getMediaAssetByTaskId(taskId: string): Promise<MediaAsset | undefined> {
+    const results = await db
+      .select()
+      .from(mediaAssets)
+      .where(eq(mediaAssets.taskId, taskId))
+      .limit(1);
+    return results[0];
+  }
 }
 
 export const storage = new DatabaseStorage();
