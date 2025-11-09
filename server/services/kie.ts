@@ -292,18 +292,14 @@ export const kieService = {
         ? 'sora-2-image-to-video'  // Image-to-video
         : 'sora-2-text-to-video';  // Text-to-video
 
-      // Build shots array (single scene for UGC ads)
-      const shots = [{
-        Scene: params.prompt,
-        duration: parseInt(durationValue)
-      }];
-
+      // Build request body based on model type
+      // Note: Storyboard uses 'shots', but regular models use 'prompt'
       requestBody = {
         model: soraModel,
         input: {
+          prompt: params.prompt,  // Add prompt field for non-Storyboard models
           n_frames: durationValue,
           aspect_ratio: aspectRatioValue,
-          shots: shots,
           ...(publicImageUrls && publicImageUrls.length > 0 && { image_urls: publicImageUrls }),
         }
       };
