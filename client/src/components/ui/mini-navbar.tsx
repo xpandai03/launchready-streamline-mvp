@@ -59,11 +59,11 @@ export function Navbar() {
   );
 
   const navLinksData = [
-    { label: 'My Clips', href: '/videos' },
+    // { label: 'My Clips', href: '/videos' },
     { label: 'UGC Ads', href: '/ai-studio' },
-    { label: 'Socials', href: '/socials' },
-    { label: 'Pricing', href: '/pricing' },
-    { label: 'Settings', href: '/settings/billing' },
+    // { label: 'Socials', href: '/socials' },
+    // { label: 'Pricing', href: '/pricing' },
+    // { label: 'Settings', href: '/settings/billing' },
   ];
 
   return (
@@ -77,7 +77,7 @@ export function Navbar() {
 
       <div className="flex items-center justify-between w-full gap-x-6 sm:gap-x-8">
         <div className="flex items-center">
-           {logoElement}
+          {logoElement}
         </div>
 
         <nav className="hidden sm:flex items-center space-x-4 sm:space-x-6 text-sm">
@@ -97,9 +97,9 @@ export function Navbar() {
 
         <button className="sm:hidden flex items-center justify-center w-8 h-8 text-gray-300 focus:outline-none" onClick={toggleMenu} aria-label={isOpen ? 'Close Menu' : 'Open Menu'}>
           {isOpen ? (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           ) : (
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
           )}
         </button>
       </div>

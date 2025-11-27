@@ -179,6 +179,17 @@ export const mediaAssets = pgTable("media_assets", {
   completedAt: timestamp("completed_at"),
 });
 
+// Ratings table - tracks user ratings for video assets
+export const ratings = pgTable("video_rating", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").notNull(),
+  assetId: text("asset_id").notNull(),
+  rating: integer("rating").notNull(), // Rating value (e.g., 1-5)
+  isActive: text("is_active").default("true").notNull(), // "true" or "false"
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   tasks: many(tasks),
@@ -302,6 +313,14 @@ export const insertMediaAssetSchema = createInsertSchema(mediaAssets, {
   updatedAt: true,
 });
 
+export const insertRatingSchema = createInsertSchema(ratings, {
+  createdAt: () => z.date().optional(),
+  updatedAt: () => z.date().optional(),
+}).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -332,3 +351,6 @@ export type InsertStripeEvent = z.infer<typeof insertStripeEventSchema>;
 
 export type MediaAsset = typeof mediaAssets.$inferSelect;
 export type InsertMediaAsset = z.infer<typeof insertMediaAssetSchema>;
+
+export type Rating = typeof ratings.$inferSelect;
+export type InsertRating = z.infer<typeof insertRatingSchema>;

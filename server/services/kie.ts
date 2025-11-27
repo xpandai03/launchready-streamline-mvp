@@ -295,7 +295,7 @@ export const kieService = {
       // Build request body based on model type
       // Note: Storyboard uses 'shots', but regular models use 'prompt'
       // Construct callback URL for production (Render deployment)
-      const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:5000';
+      const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:5555';
       const callBackUrl = `${baseUrl}/api/kie/sora2/callback`;
 
       requestBody = {

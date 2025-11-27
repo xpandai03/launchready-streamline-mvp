@@ -54,6 +54,7 @@ interface MediaAsset {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  userRating?: number | null;
 }
 
 interface UGCAdPreviewModalProps {
@@ -73,6 +74,7 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
   const [showPostFlow, setShowPostFlow] = useState(false);
   const [error, setError] = useState(false);
   const [isPosting, setIsPosting] = useState(false); // Loading state for Instagram posting
+  const [rating, setRating] = useState<number | null>(asset?.userRating ?? null); // Star rating state
 
   // Context hooks
   const queryClient = useQueryClient();
@@ -279,6 +281,53 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
     }
   };
 
+  // Submit rating to server
+  const handleRatingSubmit = async (selectedRating: number) => {
+    if (!asset || !asset.id) return;
+
+    try {
+      const response = await apiRequest('POST', '/api/save-rating', {
+        asset_id: asset.id,
+        user_id: asset.userId,
+        rating: selectedRating,
+      });
+
+      if (response.ok) {
+        toast({
+          title: 'Rating submitted successfully!',
+        });
+        setRating(selectedRating);
+      } else {
+        throw new Error('Failed to submit rating');
+      }
+    } catch (error) {
+      toast({
+        title: 'Failed to submit rating',
+        description: error.message || 'Please try again',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Render Star Rating UI
+  const renderStarRating = () => (
+    <div className="flex items-center space-x-1">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          onClick={() => handleRatingSubmit(star)}
+          className={`text-2xl transform transition-transform duration-200 hover:scale-125 ${rating && rating >= star ? 'text-yellow-400' : 'text-gray-400'
+            }`}
+          style={{
+            filter: rating && rating >= star ? 'drop-shadow(0 0 5px gold)' : 'none',
+          }}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+
   // ========================================
   // CONDITIONAL RENDERING (AFTER ALL HOOKS)
   // ========================================
@@ -312,6 +361,12 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
             </div>
           </DialogDescription>
         </DialogHeader>
+
+        {/* Star Rating Section */}
+        <div className="py-4 border-t border-white/10">
+          <h3 className="text-lg font-medium text-white">Rate this Ad</h3>
+          {renderStarRating()}
+        </div>
 
         {/* Preview Section */}
         <div className="space-y-4">
@@ -352,8 +407,8 @@ export function UGCAdPreviewModal({ asset, onClose }: UGCAdPreviewModalProps) {
                   {asset.status === 'processing'
                     ? 'This ad is still being generated. Preview will be available once complete.'
                     : asset.status === 'error'
-                    ? 'Generation failed. No preview available.'
-                    : 'No preview available for this generation.'}
+                      ? 'Generation failed. No preview available.'
+                      : 'No preview available for this generation.'}
                 </p>
               </div>
             )}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,20 +27,24 @@ const DURATION_CONFIG = {
 export default function HomePage() {
   const [urls, setUrls] = useState("");
   const [email, setEmail] = useState("");
+
   const [targetClipCount, setTargetClipCount] = useState<number>(CLIP_COUNT_CONFIG.default);
   const [minimumDuration, setMinimumDuration] = useState<number>(DURATION_CONFIG.default);
   const [showLimitDialog, setShowLimitDialog] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
+  useEffect(() => {
+    setLocation("/ai-studio")
+  }, [])
   const processVideoMutation = useMutation({
-    mutationFn: async ({ 
-      videoUrl, 
+    mutationFn: async ({
+      videoUrl,
       email,
       targetClipCount,
       minimumDuration
-    }: { 
-      videoUrl: string; 
+    }: {
+      videoUrl: string;
       email: string;
       targetClipCount: number;
       minimumDuration: number;
@@ -71,7 +75,7 @@ export default function HomePage() {
       // Check if error is due to usage limits
       const errorMessage = error.message || "";
       if (errorMessage.toLowerCase().includes("limit") ||
-          errorMessage.toLowerCase().includes("free tier")) {
+        errorMessage.toLowerCase().includes("free tier")) {
         setShowLimitDialog(true);
         return;
       }
@@ -108,8 +112,8 @@ export default function HomePage() {
       return;
     }
 
-    processVideoMutation.mutate({ 
-      videoUrl: url, 
+    processVideoMutation.mutate({
+      videoUrl: url,
       email: email.trim(),
       targetClipCount,
       minimumDuration

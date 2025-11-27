@@ -1425,7 +1425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           );
 
           const finalStatus = instagramPost?.status === 'published' ? 'published' :
-                             instagramPost?.status === 'failed' ? 'failed' : 'posting';
+            instagramPost?.status === 'failed' ? 'failed' : 'posting';
 
           // Update social post with success
           const updatedPost = await storage.updateSocialPost(socialPost.id, {
@@ -1879,9 +1879,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Media asset not found" });
       }
 
+      const activeRating = await storage.getActiveRating(id);
+
       res.json({
         success: true,
         asset: mediaAsset,
+        rating: activeRating?.rating || null,
       });
 
     } catch (error: any) {
@@ -1900,8 +1903,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
    */
   app.get("/api/ai/media", requireAuth, async (req, res) => {
     try {
-      const mediaAssets = await storage.getMediaAssetsByUser(req.userId!);
+      let mediaAssets = await storage.getMediaAssetsByUser(req.userId!);
+      console.log(mediaAssets.map(asset => asset.id))
 
+      const ratings = await storage.getRatingsForAssets(mediaAssets.map(asset => asset.id))
+      const ratingsMap = new Map<string, number>();
+      ratings.forEach(rating => {
+        ratingsMap.set(rating.assetId, rating.rating)
+      })
+      mediaAssets.forEach(asset => {
+        (asset as any).userRating = ratingsMap.get(asset.id) || null;
+      })
       res.json({
         success: true,
         assets: mediaAssets,
@@ -2054,6 +2066,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Reset asset to processing state
       await storage.updateMediaAsset(id, {
+
         status: 'processing',
         errorMessage: null,
         retryCount: currentRetryCount + 1,
@@ -2806,6 +2819,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         error: error.message || 'Failed to create portal session',
       });
+    }
+  });
+
+  // POST /api/save-rating - Save or update video rating
+  app.post("/api/save-rating", requireAuth, async (req, res) => {
+    try {
+      const { asset_id, rating } = req.body;
+      const user_id = req.userId!;
+
+      // Check if an active record exists for the user and asset
+      const existingRecord = await storage.getRatingRecord(user_id, asset_id);
+
+      if (existingRecord) {
+        // Update the existing record to set is_active to false
+        await storage.updateRatingRecord(existingRecord.id, { isActive: 'false' });
+      }
+
+      // Create a new record with is_active set to true
+      const newRecord = await storage.createRatingRecord({
+        userId: user_id,
+        assetId: asset_id,
+        rating,
+        isActive: "true",
+      });
+
+      res.json({ success: true, newRecord });
+    } catch (error: any) {
+      console.error("Error saving rating:", error);
+      res.status(500).json({ error: error.message || "Failed to save rating" });
     }
   });
 

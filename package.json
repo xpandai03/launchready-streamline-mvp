@@ -11,7 +11,9 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "migrate:uuid": "tsx scripts/apply-uuid-migration.ts",
-    "backfill:media-urls": "tsx scripts/backfill-media-urls.ts"
+    "migrate:video-rating": "tsx scripts/apply-video-rating-migration.ts",
+    "backfill:media-urls": "tsx scripts/backfill-media-urls.ts",
+    "migrate:caption-fields": "tsx scripts/migrate-caption-fields.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -108,10 +110,11 @@
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.20",
-    "drizzle-kit": "^0.31.4",
+    "drizzle-kit": "^0.31.7",
     "esbuild": "^0.25.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.17",
+    "ts-node": "^10.9.2",
     "tsx": "^4.20.5",
     "typescript": "5.6.3",
     "vite": "^5.4.20"

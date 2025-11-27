@@ -7,6 +7,7 @@ import {
   exports,
   socialPosts,
   mediaAssets,
+  ratings,
   type User,
   type InsertUser,
   type Task,
@@ -21,9 +22,10 @@ import {
   type InsertSocialPost,
   type MediaAsset,
   type InsertMediaAsset,
+  type Rating as RatingRecord,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -38,16 +40,16 @@ export interface IStorage {
   updateTask(id: string, updates: Partial<InsertTask>): Promise<Task | undefined>;
   getTask(id: string): Promise<Task | undefined>;
   getAllTasks(userId: string): Promise<Task[]>;
-  
+
   // Folders
   createFolder(folder: InsertFolder): Promise<Folder>;
   getFolder(id: string): Promise<Folder | undefined>;
-  
+
   // Projects
   createProject(project: InsertProject): Promise<Project>;
   getProjectsByTask(taskId: string): Promise<Project[]>;
   getProject(id: string): Promise<Project | undefined>;
-  
+
   // Exports
   createExport(exportData: InsertExport): Promise<Export>;
   updateExport(id: string, updates: Partial<InsertExport>): Promise<Export | undefined>;
@@ -66,6 +68,11 @@ export interface IStorage {
   getMediaAsset(id: string): Promise<MediaAsset | undefined>;
   updateMediaAsset(id: string, updates: Partial<Omit<MediaAsset, 'id' | 'createdAt'>>): Promise<MediaAsset | undefined>;
   getMediaAssetsByUser(userId: string): Promise<MediaAsset[]>;
+
+  // Ratings
+  getRatingRecord(userId: string, assetId: string): Promise<RatingRecord | undefined>;
+  updateRatingRecord(id: string, updates: Partial<Omit<RatingRecord, 'id'>>): Promise<RatingRecord | undefined>;
+  createRatingRecord(record: RatingRecord): Promise<RatingRecord>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -279,6 +286,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(mediaAssets.createdAt));
   }
 
+  async getRatingsForAssets(assetIds: string[]): Promise<RatingRecord[]> {
+    return db
+      .select()
+      .from(ratings)
+      .where(and(inArray(ratings.assetId, assetIds), eq(ratings.isActive, true)));
+  }
   async getMediaAssetByTaskId(taskId: string): Promise<MediaAsset | undefined> {
     const results = await db
       .select()
@@ -286,6 +299,38 @@ export class DatabaseStorage implements IStorage {
       .where(eq(mediaAssets.taskId, taskId))
       .limit(1);
     return results[0];
+  }
+
+  // Ratings
+  async getRatingRecord(userId: string, assetId: string): Promise<RatingRecord | undefined> {
+    const [record] = await db
+      .select()
+      .from(ratings)
+      .where(eq(ratings.userId, userId), eq(ratings.assetId, assetId), eq(ratings.isActive, true));
+    return record || undefined;
+  }
+
+  async updateRatingRecord(id: string, updates: Partial<Omit<RatingRecord, 'id'>>): Promise<RatingRecord | undefined> {
+    const [updatedRecord] = await db
+      .update(ratings)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(ratings.id, id))
+      .returning();
+    return updatedRecord || undefined;
+  }
+
+  async createRatingRecord(record: any): Promise<RatingRecord> {
+    const [newRecord] = await db.insert(ratings).values(record).returning();
+    return newRecord;
+  }
+
+  async getActiveRating(assetId: string): Promise<RatingRecord | undefined> {
+    const [rating] = await db
+      .select()
+      .from(ratings)
+      .where(and(eq(ratings.assetId, assetId), eq(ratings.isActive, "true")))
+      .limit(1);
+    return rating || undefined;
   }
 }
 

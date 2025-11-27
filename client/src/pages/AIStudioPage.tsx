@@ -258,8 +258,8 @@ export default function AIStudioPage() {
   // Sort assets by creation date (newest first)
   const sortedAssets = gallery?.assets
     ? [...gallery.assets].sort((a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
     : [];
 
   return (
@@ -569,13 +569,15 @@ export default function AIStudioPage() {
       </div>
 
       {/* UGC Ad Preview Modal */}
-      <UGCAdPreviewModal
-        asset={selectedAsset}
-        onClose={() => {
-          console.log('[AIStudio] Closing modal');
-          setSelectedAsset(null);
-        }}
-      />
+      {selectedAsset &&
+        <UGCAdPreviewModal
+          asset={selectedAsset}
+          onClose={() => {
+            console.log('[AIStudio] Closing modal');
+            setSelectedAsset(null);
+          }}
+        />
+      }
 
       {/* Usage Limit Dialog */}
       <LimitReachedDialog
