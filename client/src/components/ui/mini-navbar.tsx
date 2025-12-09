@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'wouter';
-import { Video, LogOut } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { Video, Settings } from 'lucide-react';
 
 const AnimatedNavLink = ({ href, children }: { href: string; children: React.ReactNode }) => {
   return (
@@ -19,14 +18,9 @@ export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [headerShapeClass, setHeaderShapeClass] = useState('rounded-full');
   const shapeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const { signOut } = useAuth();
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
-  };
-
-  const handleLogout = async () => {
-    await signOut();
   };
 
   useEffect(() => {
@@ -63,7 +57,6 @@ export function Navbar() {
     { label: 'UGC Ads', href: '/ai-studio' },
     { label: 'Schedule', href: '/schedule' },
     { label: 'Socials', href: '/socials' },
-    { label: 'Settings', href: '/settings/billing' },
   ];
 
   return (
@@ -86,13 +79,11 @@ export function Navbar() {
               {link.label}
             </AnimatedNavLink>
           ))}
-          <button
-            onClick={handleLogout}
-            className="relative inline-flex items-center gap-1.5 text-sm text-white/90 hover:text-white cursor-pointer transition-colors duration-200 ease-out hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]"
-          >
-            <LogOut className="h-4 w-4" />
-            <span>Logout</span>
-          </button>
+          <Link href="/settings/billing">
+            <a className="relative inline-flex items-center text-white/90 hover:text-white cursor-pointer transition-colors duration-200 ease-out hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
+              <Settings className="h-5 w-5" />
+            </a>
+          </Link>
         </nav>
 
         <button className="sm:hidden flex items-center justify-center w-8 h-8 text-gray-300 focus:outline-none" onClick={toggleMenu} aria-label={isOpen ? 'Close Menu' : 'Open Menu'}>
@@ -114,13 +105,12 @@ export function Navbar() {
               </a>
             </Link>
           ))}
-          <button
-            onClick={handleLogout}
-            className="inline-flex items-center justify-center gap-2 text-base text-white/90 hover:text-white transition-colors duration-200 w-full text-center cursor-pointer hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]"
-          >
-            <LogOut className="h-4 w-4" />
-            <span>Logout</span>
-          </button>
+          <Link href="/settings/billing">
+            <a className="inline-flex items-center justify-center gap-2 text-base text-white/90 hover:text-white transition-colors duration-200 w-full text-center cursor-pointer hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
+              <Settings className="h-4 w-4" />
+              <span>Settings</span>
+            </a>
+          </Link>
         </nav>
       </div>
     </header>

@@ -24,6 +24,8 @@ import {
   Check,
   TrendingUp,
   Sparkles,
+  LogOut,
+  Home,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -56,9 +58,13 @@ interface CreditTransaction {
 export default function BillingSettingsPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const queryClient = useQueryClient();
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
+
+  const handleLogout = async () => {
+    await signOut();
+  };
 
   // Fetch credit balance
   const { data: creditData, isLoading: creditsLoading } = useQuery<CreditBalanceData>({
@@ -123,9 +129,22 @@ export default function BillingSettingsPage() {
               Purchase credits to use Streamline AI features
             </p>
           </div>
-          <Link href="/">
-            <Button variant="outline">Back to Home</Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/">
+              <Button variant="outline" className="gap-2">
+                <Home className="h-4 w-4" />
+                Home
+              </Button>
+            </Link>
+            <Button
+              variant="outline"
+              onClick={handleLogout}
+              className="gap-2 border-red-500/50 text-red-500 hover:bg-red-500/10 hover:text-red-400"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* Credit Balance Card */}
