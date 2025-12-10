@@ -45,6 +45,9 @@ import {
   ICP_OPTIONS,
   SCENE_OPTIONS,
   MODE_OPTIONS,
+  DURATION_OPTIONS,
+  DEFAULT_DURATION,
+  getAllowedDurations,
   formatICPForPrompt,
   formatSceneForPrompt,
 } from "@/constants/ugc-form-options";
@@ -83,7 +86,7 @@ interface GenerateMediaResponse {
 }
 
 export default function AIStudioPage() {
-  // Form state - Phase 4 Simplified (5 fields)
+  // Form state - Phase 4 Simplified (5 fields + duration)
   const [productImage, setProductImage] = useState(""); // Preview URL (for display)
   const [productImageFile, setProductImageFile] = useState<File | null>(null); // Actual file object
   const [productName, setProductName] = useState("");
@@ -91,9 +94,23 @@ export default function AIStudioPage() {
   const [customerPersona, setCustomerPersona] = useState(ICP_OPTIONS[0].value);
   const [videoSetting, setVideoSetting] = useState(SCENE_OPTIONS[0].value);
   const [generationMode, setGenerationMode] = useState(MODE_OPTIONS[0].value);
+  const [videoDuration, setVideoDuration] = useState<number>(DEFAULT_DURATION);
   const [showLimitDialog, setShowLimitDialog] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
   const [captionSettingsOpen, setCaptionSettingsOpen] = useState(false);
+
+  // Get allowed durations for current mode
+  const allowedDurations = getAllowedDurations(generationMode);
+
+  // Auto-adjust duration when mode changes (if current duration is not allowed)
+  const handleModeChange = (newMode: string) => {
+    setGenerationMode(newMode);
+    const newAllowedDurations = getAllowedDurations(newMode);
+    if (!newAllowedDurations.includes(videoDuration)) {
+      // Reset to default or max allowed
+      setVideoDuration(newAllowedDurations.includes(DEFAULT_DURATION) ? DEFAULT_DURATION : newAllowedDurations[newAllowedDurations.length - 1]);
+    }
+  };
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -128,6 +145,7 @@ export default function AIStudioPage() {
       customerPersona: string;
       videoSetting: string;
       generationMode: string;
+      duration: number;
       productImageFile?: File | null;
       productImageUrl?: string;
     }) => {
@@ -138,6 +156,7 @@ export default function AIStudioPage() {
       formData.append('customerPersona', params.customerPersona);
       formData.append('videoSetting', params.videoSetting);
       formData.append('generationMode', params.generationMode);
+      formData.append('duration', params.duration.toString());
 
       // Add file if provided (drag-and-drop upload)
       if (params.productImageFile) {
@@ -250,6 +269,7 @@ export default function AIStudioPage() {
       customerPersona,
       videoSetting,
       generationMode,
+      duration: videoDuration,
       productImageFile: productImageFile, // Send actual file object
       productImageUrl: productImageFile ? undefined : (productImage.trim() || undefined), // Only send URL if no file
     });
@@ -440,7 +460,7 @@ export default function AIStudioPage() {
                     <button
                       key={mode.value}
                       type="button"
-                      onClick={() => setGenerationMode(mode.value)}
+                      onClick={() => handleModeChange(mode.value)}
                       className={`
                         w-full text-left p-4 rounded-lg border transition-all
                         ${generationMode === mode.value
@@ -469,6 +489,43 @@ export default function AIStudioPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* 7. Video Duration */}
+              <div className="space-y-2">
+                <Label className="text-white text-sm font-medium flex items-center gap-2">
+                  Video Length
+                  <span className="text-red-400">*</span>
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {DURATION_OPTIONS.map((option) => {
+                    const isAllowed = allowedDurations.includes(option.value);
+                    const isSelected = videoDuration === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => isAllowed && setVideoDuration(option.value)}
+                        disabled={!isAllowed}
+                        className={`
+                          px-4 py-2 rounded-lg border text-sm font-medium transition-all
+                          ${isSelected
+                            ? 'bg-blue-600/30 border-blue-500 text-blue-400'
+                            : isAllowed
+                              ? 'bg-white/5 border-white/20 text-white hover:bg-white/10'
+                              : 'bg-white/5 border-white/10 text-white/30 cursor-not-allowed'
+                          }
+                        `}
+                        title={!isAllowed ? `Not available in ${MODE_OPTIONS.find(m => m.value === generationMode)?.label}` : ''}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-white/50">
+                  Max duration varies by mode: Veo3 modes support up to 20s, Sora2 supports up to 25s
+                </p>
               </div>
 
               {/* Generate Button */}

@@ -28,7 +28,7 @@ export interface GenerateVideoParams {
   model?: 'veo3' | 'veo3_fast' | 'sora2' | 'sora2-pro';
   aspectRatio?: string; // Default: '16:9'
   imageUrls?: string[]; // Optional image-to-video
-  duration?: '10s' | '15s' | '25s'; // Sora2 duration (Pro supports 25s)
+  duration?: number; // Duration in seconds (6-25 depending on model)
   removeWatermark?: boolean; // Sora2 watermark removal
 }
 
@@ -284,8 +284,8 @@ export const kieService = {
       // Convert aspect ratio to portrait/landscape
       const aspectRatioValue = params.aspectRatio === '9:16' ? 'portrait' : 'landscape';
 
-      // Convert duration from "10s" to "10"
-      const durationValue = (params.duration || '10s').replace('s', '');
+      // Duration in seconds (default to 10)
+      const durationValue = params.duration || 10;
 
       // Determine which Sora2 model to use
       const soraModel = publicImageUrls && publicImageUrls.length > 0
@@ -303,7 +303,7 @@ export const kieService = {
         callBackUrl,  // Include callback URL for async updates
         input: {
           prompt: params.prompt,  // Add prompt field for non-Storyboard models
-          n_frames: durationValue,
+          n_frames: durationValue.toString(), // KIE expects string for n_frames
           aspect_ratio: aspectRatioValue,
           ...(publicImageUrls && publicImageUrls.length > 0 && { image_urls: publicImageUrls }),
         }
@@ -321,10 +321,14 @@ export const kieService = {
       // Veo3 endpoint (existing)
       endpoint = `${KIE_BASE_URL}/api/v1/veo/generate`;
 
+      // Duration in seconds for Veo3 (default to 10)
+      const durationValue = params.duration || 10;
+
       requestBody = {
         prompt: params.prompt,
         model: model,
         aspectRatio: params.aspectRatio || '16:9',
+        duration: durationValue, // Veo3 accepts numeric duration
         ...(publicImageUrls && { imageUrls: publicImageUrls }),
       };
 
@@ -332,6 +336,7 @@ export const kieService = {
         prompt: params.prompt.substring(0, 50) + '...',
         model,
         aspectRatio: params.aspectRatio || '16:9',
+        duration: durationValue + 's',
         imageUrls: publicImageUrls?.map(url => url.substring(0, 60) + '...'),
       });
     }

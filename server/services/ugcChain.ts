@@ -48,6 +48,7 @@ export interface StartChainParams {
   assetId: string;
   promptVariables: PromptVariables;
   productImageUrl?: string;
+  duration?: number; // Video duration in seconds (6-20 for Veo3)
 }
 
 /**
@@ -58,9 +59,10 @@ export const ugcChainService = {
    * Step 1: Start NanoBanana image generation
    */
   async startImageGeneration(params: StartChainParams): Promise<void> {
-    const { assetId, promptVariables } = params;
+    const { assetId, promptVariables, duration } = params;
 
     console.log(`[UGC Chain] Step 1: Starting NanoBanana image generation for asset ${assetId}`);
+    console.log(`[UGC Chain] Requested video duration: ${duration || 10}s`);
 
     try {
       // Generate image prompt using preset template
@@ -92,6 +94,7 @@ export const ugcChainService = {
         metadata: {
           imagePrompt,
           promptVariables,
+          duration: duration || 10, // Store duration for video generation step
         },
       });
 
@@ -296,12 +299,21 @@ Be specific and detailed - this description will be used to create a video based
   /**
    * Step 4: Start Veo3 video generation with analyzed image as reference
    * Image URL is optional - if not provided, generates text-only video
+   * Duration is retrieved from asset metadata if not provided
    */
   async startVideoGeneration(assetId: string, videoPrompt: string, imageUrl?: string): Promise<void> {
     console.log(`[UGC Chain] Step 4: Starting Veo3 video generation`);
     console.log(`[UGC Chain] Asset ID: ${assetId}`);
     console.log(`[UGC Chain] Video prompt length: ${videoPrompt.length} chars`);
     console.log(`[UGC Chain] Reference image: ${imageUrl ? imageUrl.substring(0, 80) + '...' : 'None (text-only mode)'}`);
+
+    // Get duration from asset metadata
+    const asset = await storage.getMediaAsset(assetId);
+    const duration = (asset?.metadata && typeof asset.metadata === 'object' && 'duration' in asset.metadata)
+      ? (asset.metadata as any).duration
+      : 10; // Default to 10 seconds
+
+    console.log(`[UGC Chain] Step 4: Using duration: ${duration}s`);
 
     try {
       // Submit to KIE Veo3 with image as reference (if available)
@@ -310,15 +322,17 @@ Be specific and detailed - this description will be used to create a video based
         prompt: videoPrompt,
         model: 'veo3',
         aspectRatio: '16:9',
+        duration, // Pass duration to KIE
         imageUrls: imageUrl ? [imageUrl] : undefined, // Use image if available, otherwise text-only
       });
 
-      const asset = await storage.getMediaAsset(assetId);
-      if (!asset) {
+      // Re-fetch asset to get latest chain metadata
+      const updatedAsset = await storage.getMediaAsset(assetId);
+      if (!updatedAsset) {
         throw new Error(`Asset ${assetId} not found`);
       }
 
-      const chainMetadata = asset.chainMetadata as ChainMetadata;
+      const chainMetadata = updatedAsset.chainMetadata as ChainMetadata;
 
       // Update chain metadata: generating video
       chainMetadata.step = 'generating_video';

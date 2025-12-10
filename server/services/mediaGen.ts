@@ -63,7 +63,7 @@ export async function generateMedia(params: GenerateMediaParams): Promise<MediaG
         model: model as any,
         aspectRatio: params.options?.aspectRatio || '9:16', // Default to vertical for UGC
         imageUrls: params.referenceImageUrl ? [params.referenceImageUrl] : undefined,
-        duration: '10s', // Sora2 default duration
+        duration: params.options?.duration || 10, // Use provided duration or default to 10s
         removeWatermark: true, // Remove watermark for cleaner UGC ads
       });
 

@@ -55,16 +55,39 @@ const processVideoAdvancedSchema = z.object({
 });
 
 // Phase 4: UGC Preset Generation Schema
+// Duration limits per mode: Veo3 modes max 20s, Sora2 max 25s
+const MODE_DURATION_LIMITS: Record<string, number> = {
+  'nanobana+veo3': 20,
+  'veo3-only': 20,
+  'sora2': 25,
+};
+
 const generateUGCPresetSchema = z.object({
   productName: z.string().min(1).max(100),
   productFeatures: z.string().min(10).max(2000), // Increased from 500 to 2000 for detailed product descriptions
   customerPersona: z.string(),
   videoSetting: z.string(),
   generationMode: z.enum(["nanobana+veo3", "veo3-only", "sora2"]),
+  // Duration in seconds - FormData sends strings, so preprocess to number
+  duration: z.preprocess(
+    (val) => {
+      if (typeof val === 'string') return parseInt(val, 10);
+      if (typeof val === 'number') return val;
+      return 10; // Default
+    },
+    z.number().int().min(6).max(30)
+  ),
   productImageUrl: z.preprocess(
     (val) => (val === "" || val === null || val === undefined) ? undefined : val,
     z.string().url().optional()
   ),
+}).refine((data) => {
+  // Validate duration against mode-specific limits
+  const maxDuration = MODE_DURATION_LIMITS[data.generationMode] || 20;
+  return data.duration <= maxDuration;
+}, {
+  message: "Duration exceeds maximum allowed for selected mode",
+  path: ["duration"],
 });
 
 // Configure multer for file uploads (in-memory storage)
@@ -1876,8 +1899,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customerPersona,
         videoSetting,
         generationMode,
+        duration,
         productImageUrl,
       } = validation.data;
+
+      console.log(`[AI UGC Preset] Duration requested: ${duration}s for mode: ${generationMode}`);
 
       // Handle uploaded file: upload to KIE and get public URL
       let finalProductImageUrl = productImageUrl;
@@ -1979,6 +2005,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         retryCount: 0,
         metadata: {
           generationMode,
+          duration, // Store requested duration
           productBrief: {
             productName,
             productFeatures,
@@ -2001,6 +2028,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           assetId,
           promptVariables,
           productImageUrl: finalProductImageUrl,
+          duration, // Pass duration to chain service
         }).then(() => {
           // Start polling loop after image generation task is submitted
           console.log('[AI UGC Preset] Starting chain polling workflow for asset:', assetId);
@@ -2018,7 +2046,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type,
           prompt: generatedPrompt,
           referenceImageUrl: finalProductImageUrl,
-          options: null,
+          options: {
+            duration, // Pass duration to media generation
+            model: generationMode === 'sora2' ? 'sora2' : 'veo3',
+          },
         }).catch((error) => {
           console.error('[AI UGC Preset] Background processing error:', error);
         });

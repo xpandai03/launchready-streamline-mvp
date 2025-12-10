@@ -138,6 +138,7 @@ export interface ModeOption {
   description: string;
   badge: string;
   estimatedTime: string;
+  maxDuration: number; // Maximum allowed duration in seconds
 }
 
 export const MODE_OPTIONS: ModeOption[] = [
@@ -146,23 +147,65 @@ export const MODE_OPTIONS: ModeOption[] = [
     label: "Mode A: Premium Quality",
     description: "NanoBanana image → Veo3 video (best visual consistency)",
     badge: "RECOMMENDED",
-    estimatedTime: "~2-3 min"
+    estimatedTime: "~2-3 min",
+    maxDuration: 20,
   },
   {
     value: "veo3-only",
     label: "Mode B: Fast",
     description: "Veo3 direct video generation (faster, good quality)",
     badge: "FASTER",
-    estimatedTime: "~1-2 min"
+    estimatedTime: "~1-2 min",
+    maxDuration: 20,
   },
   {
     value: "sora2",
     label: "Mode C: Budget",
     description: "Sora 2 video (cheaper alternative, decent quality)",
     badge: "CHEAPER",
-    estimatedTime: "~1-2 min"
+    estimatedTime: "~1-2 min",
+    maxDuration: 25,
   },
 ];
+
+// ==================== VIDEO DURATION OPTIONS ====================
+
+export interface DurationOption {
+  value: number;
+  label: string;
+}
+
+export const DURATION_OPTIONS: DurationOption[] = [
+  { value: 6, label: "6 seconds" },
+  { value: 10, label: "10 seconds" },
+  { value: 15, label: "15 seconds" },
+  { value: 20, label: "20 seconds" },
+  { value: 25, label: "25 seconds" },
+];
+
+/**
+ * Get allowed durations for a given generation mode
+ */
+export function getAllowedDurations(mode: string): number[] {
+  const modeOption = MODE_OPTIONS.find(opt => opt.value === mode);
+  const maxDuration = modeOption?.maxDuration || 20;
+  return DURATION_OPTIONS
+    .filter(opt => opt.value <= maxDuration)
+    .map(opt => opt.value);
+}
+
+/**
+ * Check if a duration is valid for a given mode
+ */
+export function isValidDuration(mode: string, duration: number): boolean {
+  const allowedDurations = getAllowedDurations(mode);
+  return allowedDurations.includes(duration);
+}
+
+/**
+ * Get the default duration (10 seconds)
+ */
+export const DEFAULT_DURATION = 10;
 
 // ==================== HELPER FUNCTIONS ====================
 
