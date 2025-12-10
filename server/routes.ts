@@ -26,6 +26,12 @@ import { z } from "zod";
 import type Stripe from "stripe";
 import { v4 as uuidv4 } from "uuid";
 
+// Admin email check helper (used by /api/user and requireAdmin middleware)
+const isAdminEmail = (email: string | null | undefined): boolean => {
+  const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(e => e.trim().toLowerCase()) || [];
+  return email ? adminEmails.includes(email.toLowerCase()) : false;
+};
+
 // Validation schemas
 const createVideoSchema = z.object({
   sourceVideoUrl: z.string().url(),
@@ -480,6 +486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         stripeCustomerId: user.stripeCustomerId,
         subscriptionEndsAt: user.subscriptionEndsAt,
         createdAt: user.createdAt,
+        isAdmin: isAdminEmail(user.email),
       });
     } catch (error: any) {
       console.error("Error fetching user:", error);
@@ -2756,13 +2763,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ADMIN CREDITS API ENDPOINTS (Phase 9)
   // ========================================
 
-  // Helper: Check if user is admin
-  const isAdmin = (email: string | null | undefined): boolean => {
-    const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(e => e.trim().toLowerCase()) || [];
-    return email ? adminEmails.includes(email.toLowerCase()) : false;
-  };
-
-  // Admin middleware
+  // Admin middleware (uses isAdminEmail helper defined at top of file)
   const requireAdmin = async (req: any, res: any, next: any) => {
     try {
       const userId = req.userId;
@@ -2771,8 +2772,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = await storage.getUser(userId);
-      if (!user || !isAdmin(user.email)) {
-        return res.status(403).json({ error: 'Forbidden: Admin access required' });
+      if (!user || !isAdminEmail(user.email)) {
+        return res.status(403).json({ error: 'Forbidden' });
       }
 
       next();

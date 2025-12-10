@@ -2,7 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'wouter';
-import { Video, Settings } from 'lucide-react';
+import { Video, Settings, Shield } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+
+interface UserData {
+  id: string;
+  email: string;
+  isAdmin: boolean;
+}
 
 const AnimatedNavLink = ({ href, children }: { href: string; children: React.ReactNode }) => {
   return (
@@ -18,6 +25,14 @@ export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [headerShapeClass, setHeaderShapeClass] = useState('rounded-full');
   const shapeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Fetch user data to check admin status
+  const { data: userData } = useQuery<UserData>({
+    queryKey: ['/api/user'],
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
+  const isAdmin = userData?.isAdmin ?? false;
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
@@ -79,6 +94,14 @@ export function Navbar() {
               {link.label}
             </AnimatedNavLink>
           ))}
+          {isAdmin && (
+            <Link href="/admin/credits">
+              <a className="relative inline-flex items-center gap-1.5 text-sm text-amber-400 hover:text-amber-300 cursor-pointer transition-colors duration-200 ease-out hover:drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]">
+                <Shield className="h-4 w-4" />
+                <span>Admin</span>
+              </a>
+            </Link>
+          )}
           <Link href="/settings/billing">
             <a className="relative inline-flex items-center text-white/90 hover:text-white cursor-pointer transition-colors duration-200 ease-out hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
               <Settings className="h-5 w-5" />
@@ -105,6 +128,14 @@ export function Navbar() {
               </a>
             </Link>
           ))}
+          {isAdmin && (
+            <Link href="/admin/credits">
+              <a className="inline-flex items-center justify-center gap-2 text-base text-amber-400 hover:text-amber-300 transition-colors duration-200 w-full text-center cursor-pointer hover:drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]">
+                <Shield className="h-4 w-4" />
+                <span>Admin</span>
+              </a>
+            </Link>
+          )}
           <Link href="/settings/billing">
             <a className="inline-flex items-center justify-center gap-2 text-base text-white/90 hover:text-white transition-colors duration-200 w-full text-center cursor-pointer hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
               <Settings className="h-4 w-4" />

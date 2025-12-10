@@ -21,6 +21,7 @@ import ScheduleDashboard from "@/pages/ScheduleDashboard";
 import BillingSuccessPage from "@/pages/billing/SuccessPage";
 import BillingCancelPage from "@/pages/billing/CancelPage";
 import PreLoginPage from "@/pages/PreLoginPage";
+import AdminCreditsPage from "@/pages/admin/AdminCreditsPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -94,6 +95,13 @@ function Router() {
         <Route path="/settings/caption-assistant">
           <ProtectedRoute>
             <CaptionSettingsPage />
+          </ProtectedRoute>
+        </Route>
+
+        {/* Admin routes - protected, backend enforces admin check */}
+        <Route path="/admin/credits">
+          <ProtectedRoute>
+            <AdminCreditsPage />
           </ProtectedRoute>
         </Route>
 
