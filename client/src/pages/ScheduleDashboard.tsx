@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { format, formatDistanceToNow } from 'date-fns';
+import AnalyticsCharts from '@/components/analytics/AnalyticsCharts';
 
 // ============================================
 // TYPES
@@ -222,6 +223,9 @@ function AnalyticsView() {
           </div>
         ))}
       </div>
+
+      {/* Performance Charts */}
+      <AnalyticsCharts summary={summary} posts={posts} />
 
       {/* Posts Performance */}
       <div>
