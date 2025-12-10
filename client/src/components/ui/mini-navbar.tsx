@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'wouter';
 import { Video, Settings, Shield } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { useBrand } from '@/contexts/BrandContext';
 
 interface UserData {
   id: string;
@@ -25,6 +26,9 @@ export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [headerShapeClass, setHeaderShapeClass] = useState('rounded-full');
   const shapeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Get dynamic app name from brand context
+  const { appName } = useBrand();
 
   // Fetch user data to check admin status
   const { data: userData } = useQuery<UserData>({
@@ -62,7 +66,7 @@ export function Navbar() {
     <Link href="/">
       <a className="flex items-center space-x-2 cursor-pointer">
         <Video className="h-5 w-5 text-gray-200" />
-        <span className="text-white font-semibold text-sm">Streamline</span>
+        <span className="text-white font-semibold text-sm">{appName}</span>
       </a>
     </Link>
   );

@@ -8,6 +8,7 @@ import {
   socialPosts,
   mediaAssets,
   stripeSettings,
+  brandSettings,
   type User,
   type InsertUser,
   type Task,
@@ -23,6 +24,7 @@ import {
   type MediaAsset,
   type InsertMediaAsset,
   type StripeSettings,
+  type BrandSettings,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, isNull } from "drizzle-orm";
@@ -74,6 +76,10 @@ export interface IStorage {
   // Stripe Settings (White-label)
   getStripeSettings(): Promise<StripeSettings | undefined>;
   updateStripeSettings(updates: Partial<Omit<StripeSettings, 'id' | 'createdAt' | 'updatedAt'>>): Promise<StripeSettings | undefined>;
+
+  // Brand Settings (White-label) - Dec 2025
+  getBrandSettings(): Promise<BrandSettings | undefined>;
+  updateBrandSettings(updates: Partial<Omit<BrandSettings, 'id' | 'createdAt' | 'updatedAt'>>): Promise<BrandSettings | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -356,6 +362,34 @@ export class DatabaseStorage implements IStorage {
       .update(stripeSettings)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(stripeSettings.id, existingSettings.id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Brand Settings (White-label) - Dec 2025
+  async getBrandSettings(): Promise<BrandSettings | undefined> {
+    const [settings] = await db.select().from(brandSettings).limit(1);
+    return settings || undefined;
+  }
+
+  async updateBrandSettings(updates: Partial<Omit<BrandSettings, 'id' | 'createdAt' | 'updatedAt'>>): Promise<BrandSettings | undefined> {
+    // Get the existing settings or create one
+    let existingSettings = await this.getBrandSettings();
+
+    if (!existingSettings) {
+      // Create a new settings row with default app name
+      const [created] = await db
+        .insert(brandSettings)
+        .values({ appName: updates.appName || 'Streamline', updatedAt: new Date() })
+        .returning();
+      return created || undefined;
+    }
+
+    // Update existing settings
+    const [updated] = await db
+      .update(brandSettings)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(brandSettings.id, existingSettings.id))
       .returning();
     return updated || undefined;
   }

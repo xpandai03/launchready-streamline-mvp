@@ -28,7 +28,9 @@ import {
   Pencil,
   X,
   Check,
+  Palette,
 } from "lucide-react";
+import { useBrand } from "@/contexts/BrandContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -63,8 +65,10 @@ interface StripeSettings {
 export default function AdminCreditsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { appName: currentAppName, refetch: refetchBrand } = useBrand();
   const [editingFeature, setEditingFeature] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<number>(0);
+  const [brandAppName, setBrandAppName] = useState<string>('');
 
   // Stripe settings form state
   const [stripeForm, setStripeForm] = useState<StripeSettings>({
@@ -112,6 +116,31 @@ export default function AdminCreditsPage() {
   // Fetch Stripe settings
   const { data: stripeData, isLoading: stripeLoading } = useQuery<{ settings: StripeSettings | null }>({
     queryKey: ["/api/admin/stripe"],
+  });
+
+  // Fetch brand settings
+  const { data: brandData, isLoading: brandLoading } = useQuery<{ appName: string }>({
+    queryKey: ["/api/admin/brand"],
+  });
+
+  // Update brand settings mutation
+  const updateBrandMutation = useMutation({
+    mutationFn: async (appName: string) => {
+      const response = await apiRequest("PUT", "/api/admin/brand", { appName });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/brand"] });
+      refetchBrand(); // Update global brand context
+      toast({ title: "Brand updated", description: "App name has been changed successfully." });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update brand settings",
+        variant: "destructive",
+      });
+    },
   });
 
   // Update Stripe settings mutation
@@ -170,6 +199,18 @@ export default function AdminCreditsPage() {
     }
   }, [stripeSettings, stripeLoading]);
 
+  // Populate brand form when data loads
+  useEffect(() => {
+    if (brandData && !brandLoading) {
+      setBrandAppName(brandData.appName || 'Streamline');
+    }
+  }, [brandData, brandLoading]);
+
+  const handleBrandSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateBrandMutation.mutate(brandAppName);
+  };
+
   const pricing = pricingData?.pricing || [];
   const settings = settingsData?.settings;
 
@@ -211,6 +252,13 @@ export default function AdminCreditsPage() {
             >
               <CreditCard className="h-4 w-4 mr-2" />
               Stripe Settings
+            </TabsTrigger>
+            <TabsTrigger
+              value="branding"
+              className="text-white data-[state=active]:bg-white/15 data-[state=active]:text-yellow-400 data-[state=inactive]:text-white/70 data-[state=inactive]:hover:text-white data-[state=inactive]:hover:bg-white/10 rounded-md px-4 py-2 transition-all"
+            >
+              <Palette className="h-4 w-4 mr-2" />
+              Branding
             </TabsTrigger>
           </TabsList>
 
@@ -542,6 +590,83 @@ export default function AdminCreditsPage() {
                       <p className="text-sm text-blue-300">
                         <strong>Note:</strong> If these fields are left empty, the system will use the environment variables
                         (STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, etc.) as fallback.
+                      </p>
+                    </div>
+                  </form>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Branding Tab */}
+          <TabsContent value="branding" className="space-y-6 mt-6">
+            <Card className="bg-white/5 border-white/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-white">
+                  <Palette className="h-5 w-5 text-pink-500" />
+                  App Branding
+                </CardTitle>
+                <CardDescription className="text-gray-400">
+                  Customize the app name that appears throughout the application.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {brandLoading ? (
+                  <div className="flex items-center gap-2 text-gray-400 py-8">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Loading brand settings...
+                  </div>
+                ) : (
+                  <form onSubmit={handleBrandSubmit} className="space-y-6">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="appName" className="text-gray-300">
+                          App Name
+                        </Label>
+                        <Input
+                          id="appName"
+                          type="text"
+                          placeholder="Streamline"
+                          value={brandAppName}
+                          onChange={(e) => setBrandAppName(e.target.value)}
+                          maxLength={50}
+                          className="bg-white/5 border-white/20 text-white placeholder:text-gray-500 max-w-md"
+                        />
+                        <p className="text-xs text-gray-500">
+                          This name will appear in the navbar and throughout the app. Max 50 characters.
+                        </p>
+                      </div>
+
+                      <div className="p-4 bg-white/5 rounded-lg max-w-md">
+                        <p className="text-sm text-gray-400 mb-2">Current app name:</p>
+                        <p className="text-xl font-semibold text-white">{currentAppName}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-start pt-4">
+                      <Button
+                        type="submit"
+                        disabled={updateBrandMutation.isPending || brandAppName.trim() === '' || brandAppName === currentAppName}
+                        className="bg-pink-600 hover:bg-pink-700"
+                      >
+                        {updateBrandMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-2" />
+                            Save App Name
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    <div className="rounded-lg bg-pink-500/10 border border-pink-500/20 p-4 mt-4">
+                      <p className="text-sm text-pink-300">
+                        <strong>White-label:</strong> Changes take effect immediately across the entire application
+                        without requiring a rebuild or restart.
                       </p>
                     </div>
                   </form>

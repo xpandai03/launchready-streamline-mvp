@@ -3321,6 +3321,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ========================================
+  // BRAND SETTINGS ENDPOINTS (Dec 2025)
+  // ========================================
+
+  // GET /api/admin/brand - Get brand settings (admin only)
+  app.get('/api/admin/brand', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getBrandSettings();
+      res.json({
+        appName: settings?.appName || 'Streamline',
+      });
+    } catch (error: any) {
+      console.error('[Admin] Error fetching brand settings:', error);
+      res.status(500).json({ error: 'Failed to fetch brand settings', details: error.message });
+    }
+  });
+
+  // PUT /api/admin/brand - Update brand settings (admin only)
+  app.put('/api/admin/brand', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { appName } = req.body;
+
+      if (!appName || typeof appName !== 'string' || appName.trim().length === 0) {
+        return res.status(400).json({ error: 'App name is required' });
+      }
+
+      if (appName.length > 50) {
+        return res.status(400).json({ error: 'App name must be 50 characters or less' });
+      }
+
+      const updatedSettings = await storage.updateBrandSettings({ appName: appName.trim() });
+      console.log(`[Admin] Brand settings updated: appName="${appName.trim()}"`);
+
+      res.json({
+        success: true,
+        appName: updatedSettings?.appName || appName.trim(),
+      });
+    } catch (error: any) {
+      console.error('[Admin] Error updating brand settings:', error);
+      res.status(500).json({ error: 'Failed to update brand settings', details: error.message });
+    }
+  });
+
+  // GET /api/brand - Public endpoint for fetching app name (no auth required)
+  app.get('/api/brand', async (req, res) => {
+    try {
+      const settings = await storage.getBrandSettings();
+      res.json({
+        appName: settings?.appName || 'Streamline',
+      });
+    } catch (error: any) {
+      console.error('[Brand] Error fetching brand settings:', error);
+      res.json({ appName: 'Streamline' }); // Fallback on error
+    }
+  });
+
+  // ========================================
   // STRIPE SUBSCRIPTION BILLING ENDPOINTS
   // ========================================
 

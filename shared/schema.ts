@@ -211,6 +211,14 @@ export const stripeSettings = pgTable("stripe_settings", {
 // END XPAND CREDITS SYSTEM
 // ============================================
 
+// Brand Settings - white-label app customization (Dec 2025)
+export const brandSettings = pgTable("brand_settings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  appName: text("app_name").notNull().default('Streamline'),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
 // Media Assets table - tracks AI-generated media (Phase 4)
 export const mediaAssets = pgTable("media_assets", {
   id: text("id").primaryKey(),
@@ -484,3 +492,5 @@ export type InsertCreditTransaction = z.infer<typeof insertCreditTransactionSche
 
 export type StripeSettings = typeof stripeSettings.$inferSelect;
 export type InsertStripeSettings = z.infer<typeof insertStripeSettingsSchema>;
+
+export type BrandSettings = typeof brandSettings.$inferSelect;
