@@ -82,14 +82,20 @@ export const lateService = {
 
     console.log('[Late Service] Creating profile for:', { email, name });
 
+    // Late.dev API only requires 'name' for profile creation
+    // The email is for our internal tracking only
+    const requestBody = { name };
+
     try {
+      console.log('[Late Service] Calling POST /profiles with:', JSON.stringify(requestBody));
+
       const response = await fetch(`${LATE_BASE_URL}/profiles`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${LATE_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, name }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();

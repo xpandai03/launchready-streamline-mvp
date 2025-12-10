@@ -671,9 +671,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user's Late.dev profile ID
       let user = await storage.getUser(userId);
 
+      console.log('[OAuth] User record:', {
+        userId,
+        email: user?.email,
+        hasLateProfileId: !!user?.lateProfileId,
+        lateProfileId: user?.lateProfileId,
+      });
+
       // Create Late.dev profile if user doesn't have one
       if (!user?.lateProfileId) {
-        console.log('[OAuth] User has no Late profile, creating one:', userId);
+        console.log('[OAuth] User has no Late profile, creating one:', userId, 'email:', user?.email);
 
         try {
           // Create Late.dev profile
@@ -690,8 +697,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           console.log('[OAuth] Late profile created:', { userId, profileId });
         } catch (profileError: any) {
+          console.log('[OAuth] Profile creation error details:', {
+            message: profileError.message,
+            name: profileError.name,
+            stack: profileError.stack?.substring(0, 300),
+          });
+
           // Handle "profile already exists" error - fetch existing profile
-          if (profileError.message && profileError.message.includes('already exists')) {
+          // Check for various error messages that indicate duplicate profile
+          const errorMsg = (profileError.message || '').toLowerCase();
+          const isAlreadyExistsError = errorMsg.includes('already exists') ||
+                                       errorMsg.includes('duplicate') ||
+                                       errorMsg.includes('name is already') ||
+                                       errorMsg.includes('profile limit');
+
+          if (isAlreadyExistsError) {
             console.log('[OAuth] Profile already exists, fetching existing profile:', user!.email);
 
             try {
