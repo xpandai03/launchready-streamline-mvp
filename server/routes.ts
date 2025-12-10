@@ -360,7 +360,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Apply authentication middleware to all /api/* routes (except /api/auth/* above)
+  // GET /api/brand - Public endpoint for fetching app name (no auth required)
+  // MUST be defined BEFORE the global auth middleware below
+  app.get('/api/brand', async (req, res) => {
+    try {
+      const settings = await storage.getBrandSettings();
+      res.json({
+        appName: settings?.appName || 'Streamline',
+      });
+    } catch (error: any) {
+      console.error('[Brand] Error fetching brand settings:', error);
+      res.json({ appName: 'Streamline' }); // Fallback on error
+    }
+  });
+
+  // Apply authentication middleware to all /api/* routes (except routes defined above)
   app.use("/api/*", requireAuth);
 
   // POST /api/videos - Create video processing task and start processing
@@ -3360,19 +3374,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('[Admin] Error updating brand settings:', error);
       res.status(500).json({ error: 'Failed to update brand settings', details: error.message });
-    }
-  });
-
-  // GET /api/brand - Public endpoint for fetching app name (no auth required)
-  app.get('/api/brand', async (req, res) => {
-    try {
-      const settings = await storage.getBrandSettings();
-      res.json({
-        appName: settings?.appName || 'Streamline',
-      });
-    } catch (error: any) {
-      console.error('[Brand] Error fetching brand settings:', error);
-      res.json({ appName: 'Streamline' }); // Fallback on error
     }
   });
 
