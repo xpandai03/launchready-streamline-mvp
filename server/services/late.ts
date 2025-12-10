@@ -361,7 +361,7 @@ export const lateService = {
       youtube: 'short',
       facebook: 'post',
       linkedin: 'post',
-      google_business: 'post',
+      googlebusiness: 'post',
     };
 
     const requestBody = {

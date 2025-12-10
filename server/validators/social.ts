@@ -34,9 +34,9 @@ export const postToSocialSchema = z.object({
     .optional(),
 
   platform: z
-    .enum(["instagram", "facebook", "linkedin", "tiktok", "youtube", "google_business"], {
+    .enum(["instagram", "facebook", "linkedin", "tiktok", "youtube", "googlebusiness"], {
       errorMap: () => ({
-        message: "Unsupported platform. Supported: instagram, facebook, linkedin, tiktok, youtube, google_business",
+        message: "Unsupported platform. Supported: instagram, facebook, linkedin, tiktok, youtube, googlebusiness",
       }),
     }),
 
@@ -105,7 +105,7 @@ export const PLATFORM_LIMITS = {
     videoMaxSize: 256 * 1024 * 1024 * 1024, // 256GB
     requiredFields: ['videoUrl', 'caption'],
   },
-  google_business: {
+  googlebusiness: {
     maxCaptionLength: 1500,
     supportedContentTypes: ['post'],
     videoMaxSize: 75 * 1024 * 1024, // 75MB

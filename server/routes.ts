@@ -647,14 +647,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('[OAuth] Connect request:', { userId, platform });
 
-      // Validate platform
-      const supportedPlatforms = ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin', 'threads', 'pinterest', 'reddit', 'bluesky'];
-      if (!supportedPlatforms.includes(platform.toLowerCase())) {
+      // Validate platform - use exact keys from Late.dev docs
+      // Note: googlebusiness (not google_business) is the correct key
+      const supportedPlatforms = ['instagram', 'tiktok', 'youtube', 'facebook', 'twitter', 'linkedin', 'threads', 'pinterest', 'reddit', 'bluesky', 'googlebusiness'];
+
+      // Map frontend platform keys to Late.dev API keys
+      const platformKeyMap: Record<string, string> = {
+        'google_business': 'googlebusiness', // Frontend uses google_business, Late uses googlebusiness
+      };
+
+      // Get the Late.dev platform key (map if needed)
+      const latePlatform = platformKeyMap[platform.toLowerCase()] || platform.toLowerCase();
+
+      if (!supportedPlatforms.includes(latePlatform)) {
         return res.status(400).json({
           error: 'Unsupported platform',
           message: `Platform "${platform}" is not supported. Supported platforms: ${supportedPlatforms.join(', ')}`,
         });
       }
+
+      console.log('[OAuth] Platform mapping:', { originalPlatform: platform, latePlatform });
 
       // Get user's Late.dev profile ID
       let user = await storage.getUser(userId);
@@ -768,25 +780,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[OAuth] Redirect URL:', { origin, frontendUrl, redirectUrl });
 
       // Generate Late.dev OAuth URL (server-side authenticated request)
+      // Use the mapped Late platform key (e.g., googlebusiness instead of google_business)
       const connectUrl = await lateService.generateConnectUrl(
         user.lateProfileId,
-        platform.toLowerCase(),
+        latePlatform, // Use the mapped platform key
         redirectUrl
       );
 
-      console.log('[OAuth] OAuth URL generated successfully:', { userId, platform, profileId: user.lateProfileId });
+      console.log('[OAuth] OAuth URL generated successfully:', { userId, platform, latePlatform, profileId: user.lateProfileId });
 
       res.json({
         success: true,
         connectUrl,
-        platform,
+        platform: latePlatform, // Return the Late.dev platform key
         profileId: user.lateProfileId,
       });
     } catch (error: any) {
-      console.error('[OAuth] Error generating connect URL:', error);
+      const { platform } = req.params;
+      console.error('[OAuth] Error generating connect URL:', {
+        error: error.message,
+        platform,
+        stack: error.stack?.substring(0, 500),
+      });
       res.status(500).json({
         error: 'Failed to generate connect URL',
-        details: error.message,
+        message: error.message,
+        platform,
       });
     }
   });
