@@ -452,13 +452,51 @@ export async function adminAddCredits(
 }
 
 /**
- * Credit packages available for purchase
+ * Credit packages available for purchase (Updated Dec 2025)
  */
 export const CREDIT_PACKAGES = [
-  { id: 'starter', name: 'Starter', credits: 100, priceUsd: 2.99, perCredit: 0.030 },
-  { id: 'basic', name: 'Basic', credits: 500, priceUsd: 12.99, perCredit: 0.026 },
-  { id: 'pro', name: 'Pro', credits: 1500, priceUsd: 34.99, perCredit: 0.023 },
-  { id: 'business', name: 'Business', credits: 5000, priceUsd: 99.99, perCredit: 0.020 },
+  {
+    id: 'starter',
+    name: 'Starter',
+    credits: 500,
+    priceUsd: 9.99,
+    perCredit: 0.020,
+    stripePriceId: 'price_credit_starter',
+  },
+  {
+    id: 'basic',
+    name: 'Basic',
+    credits: 1500,
+    priceUsd: 24.99,
+    perCredit: 0.0167,
+    stripePriceId: 'price_credit_basic',
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    credits: 5000,
+    priceUsd: 69.99,
+    perCredit: 0.014,
+    stripePriceId: 'price_credit_pro',
+  },
+  {
+    id: 'agency',
+    name: 'Agency',
+    credits: 12000,
+    priceUsd: 149.99,
+    perCredit: 0.0125,
+    stripePriceId: 'price_credit_agency',
+    badge: 'Best Value',
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    credits: 30000,
+    priceUsd: 349.99,
+    perCredit: 0.0117,
+    stripePriceId: 'price_credit_enterprise',
+    badge: 'High Volume',
+  },
 ] as const;
 
 export type CreditPackage = typeof CREDIT_PACKAGES[number];

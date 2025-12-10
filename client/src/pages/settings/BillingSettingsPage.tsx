@@ -44,6 +44,7 @@ interface CreditPackage {
   credits: number;
   priceUsd: number;
   perCredit: number;
+  badge?: string; // 'Best Value' or 'High Volume'
 }
 
 interface CreditTransaction {
@@ -114,9 +115,6 @@ export default function BillingSettingsPage() {
   const packages = packagesData?.packages || [];
   const transactions = historyData?.transactions || [];
   const balance = creditData?.balance ?? 0;
-
-  // Highlight best value package
-  const bestValuePackage = "pro"; // 1500 credits
 
   return (
     <div className="min-h-screen bg-black pt-24 pb-8 px-6">
@@ -193,7 +191,7 @@ export default function BillingSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Credit Packages */}
+        {/* Credit Packages (5 Tiers - Dec 2025) */}
         <Card className="bg-white/5 border-white/10">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
@@ -205,58 +203,73 @@ export default function BillingSettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {packages.map((pkg) => (
-                <div
-                  key={pkg.id}
-                  className={`relative rounded-xl p-5 border transition-all ${
-                    pkg.id === bestValuePackage
-                      ? "bg-gradient-to-br from-blue-600/20 to-purple-600/20 border-blue-500/50"
-                      : "bg-white/5 border-white/10 hover:border-white/20"
-                  }`}
-                >
-                  {pkg.id === bestValuePackage && (
-                    <Badge className="absolute -top-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                      <Sparkles className="h-3 w-3 mr-1" />
-                      Best Value
-                    </Badge>
-                  )}
-                  <div className="text-center space-y-3">
-                    <h3 className="font-semibold text-white text-lg">{pkg.name}</h3>
-                    <div>
-                      <span className="text-3xl font-bold text-white">{pkg.credits.toLocaleString()}</span>
-                      <span className="text-gray-400 text-sm ml-1">credits</span>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {packages.map((pkg) => {
+                const isBestValue = pkg.badge === 'Best Value';
+                const isHighVolume = pkg.badge === 'High Volume';
+
+                return (
+                  <div
+                    key={pkg.id}
+                    className={`relative rounded-xl p-5 border transition-all ${
+                      isBestValue
+                        ? "bg-gradient-to-br from-green-600/20 to-emerald-600/20 border-green-500/50"
+                        : isHighVolume
+                        ? "bg-gradient-to-br from-purple-600/20 to-indigo-600/20 border-purple-500/50"
+                        : "bg-white/5 border-white/10 hover:border-white/20"
+                    }`}
+                  >
+                    {pkg.badge && (
+                      <Badge
+                        className={`absolute -top-2 left-1/2 -translate-x-1/2 text-white ${
+                          isBestValue
+                            ? "bg-gradient-to-r from-green-600 to-emerald-600"
+                            : "bg-gradient-to-r from-purple-600 to-indigo-600"
+                        }`}
+                      >
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        {pkg.badge}
+                      </Badge>
+                    )}
+                    <div className="text-center space-y-3">
+                      <h3 className="font-semibold text-white text-lg">{pkg.name}</h3>
+                      <div>
+                        <span className="text-3xl font-bold text-white">{pkg.credits.toLocaleString()}</span>
+                        <span className="text-gray-400 text-sm ml-1">credits</span>
+                      </div>
+                      <div className="text-2xl font-bold text-white">
+                        ${pkg.priceUsd.toFixed(2)}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        ${pkg.perCredit.toFixed(3)}/credit
+                      </div>
+                      <Button
+                        className={`w-full ${
+                          isBestValue
+                            ? "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                            : isHighVolume
+                            ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+                            : ""
+                        }`}
+                        onClick={() => handlePurchase(pkg.id)}
+                        disabled={purchaseMutation.isPending}
+                      >
+                        {purchaseMutation.isPending && selectedPackage === pkg.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Buy Now
+                          </>
+                        )}
+                      </Button>
                     </div>
-                    <div className="text-2xl font-bold text-white">
-                      ${pkg.priceUsd.toFixed(2)}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      ${pkg.perCredit.toFixed(3)}/credit
-                    </div>
-                    <Button
-                      className={`w-full ${
-                        pkg.id === bestValuePackage
-                          ? "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                          : ""
-                      }`}
-                      onClick={() => handlePurchase(pkg.id)}
-                      disabled={purchaseMutation.isPending}
-                    >
-                      {purchaseMutation.isPending && selectedPackage === pkg.id ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <CreditCard className="h-4 w-4 mr-2" />
-                          Buy Now
-                        </>
-                      )}
-                    </Button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <p className="text-xs text-gray-500 mt-4 text-center">
               Secure payment powered by Stripe. Credits are added instantly after purchase.

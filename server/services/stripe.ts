@@ -13,10 +13,13 @@ import { storage } from '../storage';
 // Environment variables (fallback)
 const ENV_STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const ENV_STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+// Credit package price IDs (Updated Dec 2025 - 5 tiers)
 const ENV_PRICE_ID_STARTER = process.env.STRIPE_PRICE_ID_STARTER;
 const ENV_PRICE_ID_BASIC = process.env.STRIPE_PRICE_ID_BASIC;
 const ENV_PRICE_ID_PRO = process.env.STRIPE_PRICE_ID_PRO;
-const ENV_PRICE_ID_BUSINESS = process.env.STRIPE_PRICE_ID_BUSINESS;
+const ENV_PRICE_ID_AGENCY = process.env.STRIPE_PRICE_ID_AGENCY;
+const ENV_PRICE_ID_ENTERPRISE = process.env.STRIPE_PRICE_ID_ENTERPRISE;
+const ENV_PRICE_ID_BUSINESS = process.env.STRIPE_PRICE_ID_BUSINESS; // Legacy
 
 // Cached Stripe instance (may be replaced by DB settings)
 let cachedStripe: Stripe | null = null;
@@ -72,6 +75,7 @@ async function getWebhookSecret(): Promise<string | null> {
 
 /**
  * Get price ID for a package - checks DB settings first, falls back to env vars
+ * Updated Dec 2025: Supports 5 tiers (Starter, Basic, Pro, Agency, Enterprise)
  */
 async function getPriceId(packageId: string): Promise<string | null> {
   try {
@@ -83,7 +87,11 @@ async function getPriceId(packageId: string): Promise<string | null> {
         return dbSettings?.priceIdBasic || ENV_PRICE_ID_BASIC || null;
       case 'pro':
         return dbSettings?.priceIdPro || ENV_PRICE_ID_PRO || null;
-      case 'business':
+      case 'agency':
+        return dbSettings?.priceIdAgency || ENV_PRICE_ID_AGENCY || null;
+      case 'enterprise':
+        return dbSettings?.priceIdEnterprise || ENV_PRICE_ID_ENTERPRISE || null;
+      case 'business': // Legacy
         return dbSettings?.priceIdBusiness || ENV_PRICE_ID_BUSINESS || null;
       default:
         return null;
@@ -94,7 +102,9 @@ async function getPriceId(packageId: string): Promise<string | null> {
       case 'starter': return ENV_PRICE_ID_STARTER || null;
       case 'basic': return ENV_PRICE_ID_BASIC || null;
       case 'pro': return ENV_PRICE_ID_PRO || null;
-      case 'business': return ENV_PRICE_ID_BUSINESS || null;
+      case 'agency': return ENV_PRICE_ID_AGENCY || null;
+      case 'enterprise': return ENV_PRICE_ID_ENTERPRISE || null;
+      case 'business': return ENV_PRICE_ID_BUSINESS || null; // Legacy
       default: return null;
     }
   }
@@ -113,11 +123,11 @@ export interface CreateCheckoutSessionParams {
   cancelUrl: string;
 }
 
-// Phase 9: Credit package checkout params
+// Phase 9: Credit package checkout params (Updated Dec 2025 - 5 tiers)
 export interface CreateCreditCheckoutParams {
   userId: string;
   userEmail: string;
-  packageId: string; // 'starter', 'basic', 'pro', 'business'
+  packageId: string; // 'starter', 'basic', 'pro', 'agency', 'enterprise'
   successUrl: string;
   cancelUrl: string;
 }

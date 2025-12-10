@@ -51,10 +51,13 @@ interface StripeSettings {
   publishableKey: string | null;
   secretKey: string | null;
   webhookSecret: string | null;
-  priceIdStarter: string | null;
-  priceIdBasic: string | null;
-  priceIdPro: string | null;
-  priceIdBusiness: string | null;
+  // Credit package price IDs (Updated Dec 2025 - 5 tiers)
+  priceIdStarter: string | null;   // 500 credits - $9.99
+  priceIdBasic: string | null;     // 1,500 credits - $24.99
+  priceIdPro: string | null;       // 5,000 credits - $69.99
+  priceIdAgency: string | null;    // 12,000 credits - $149.99
+  priceIdEnterprise: string | null; // 30,000 credits - $349.99
+  priceIdBusiness: string | null;  // Legacy
 }
 
 export default function AdminCreditsPage() {
@@ -71,6 +74,8 @@ export default function AdminCreditsPage() {
     priceIdStarter: '',
     priceIdBasic: '',
     priceIdPro: '',
+    priceIdAgency: '',
+    priceIdEnterprise: '',
     priceIdBusiness: '',
   });
 
@@ -158,6 +163,8 @@ export default function AdminCreditsPage() {
         priceIdStarter: stripeSettings.priceIdStarter || '',
         priceIdBasic: stripeSettings.priceIdBasic || '',
         priceIdPro: stripeSettings.priceIdPro || '',
+        priceIdAgency: stripeSettings.priceIdAgency || '',
+        priceIdEnterprise: stripeSettings.priceIdEnterprise || '',
         priceIdBusiness: stripeSettings.priceIdBusiness || '',
       });
     }
@@ -425,12 +432,12 @@ export default function AdminCreditsPage() {
                     <div className="border-t border-white/10 pt-6">
                       <h4 className="text-white font-medium mb-4 flex items-center gap-2">
                         <CreditCard className="h-4 w-4" />
-                        Credit Package Price IDs
+                        Credit Package Price IDs (5 Tiers - Dec 2025)
                       </h4>
-                      <div className="grid md:grid-cols-2 gap-4">
+                      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="priceIdStarter" className="text-gray-300">
-                            Starter (100 credits - $2.99)
+                            Starter (500 credits - $9.99)
                           </Label>
                           <Input
                             id="priceIdStarter"
@@ -443,7 +450,7 @@ export default function AdminCreditsPage() {
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="priceIdBasic" className="text-gray-300">
-                            Basic (500 credits - $12.99)
+                            Basic (1,500 credits - $24.99)
                           </Label>
                           <Input
                             id="priceIdBasic"
@@ -456,7 +463,7 @@ export default function AdminCreditsPage() {
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="priceIdPro" className="text-gray-300">
-                            Pro (1,500 credits - $34.99)
+                            Pro (5,000 credits - $69.99)
                           </Label>
                           <Input
                             id="priceIdPro"
@@ -468,8 +475,36 @@ export default function AdminCreditsPage() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="priceIdBusiness" className="text-gray-300">
-                            Business (5,000 credits - $99.99)
+                          <Label htmlFor="priceIdAgency" className="text-gray-300">
+                            Agency (12,000 credits - $149.99)
+                            <span className="ml-2 text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">Best Value</span>
+                          </Label>
+                          <Input
+                            id="priceIdAgency"
+                            type="text"
+                            placeholder="price_..."
+                            value={stripeForm.priceIdAgency || ''}
+                            onChange={(e) => setStripeForm({ ...stripeForm, priceIdAgency: e.target.value })}
+                            className="bg-white/5 border-white/20 text-white placeholder:text-gray-500"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="priceIdEnterprise" className="text-gray-300">
+                            Enterprise (30,000 credits - $349.99)
+                            <span className="ml-2 text-xs bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded">High Volume</span>
+                          </Label>
+                          <Input
+                            id="priceIdEnterprise"
+                            type="text"
+                            placeholder="price_..."
+                            value={stripeForm.priceIdEnterprise || ''}
+                            onChange={(e) => setStripeForm({ ...stripeForm, priceIdEnterprise: e.target.value })}
+                            className="bg-white/5 border-white/20 text-white placeholder:text-gray-500"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="priceIdBusiness" className="text-gray-300 text-gray-500">
+                            Business (Legacy)
                           </Label>
                           <Input
                             id="priceIdBusiness"
@@ -477,7 +512,7 @@ export default function AdminCreditsPage() {
                             placeholder="price_..."
                             value={stripeForm.priceIdBusiness || ''}
                             onChange={(e) => setStripeForm({ ...stripeForm, priceIdBusiness: e.target.value })}
-                            className="bg-white/5 border-white/20 text-white placeholder:text-gray-500"
+                            className="bg-white/5 border-white/20 text-white/50 placeholder:text-gray-500"
                           />
                         </div>
                       </div>

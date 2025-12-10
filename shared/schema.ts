@@ -195,10 +195,14 @@ export const stripeSettings = pgTable("stripe_settings", {
   publishableKey: text("publishable_key"), // pk_live_... or pk_test_...
   secretKey: text("secret_key"), // sk_live_... or sk_test_...
   webhookSecret: text("webhook_secret"), // whsec_...
-  priceIdStarter: text("price_id_starter"), // price_... for 100 credits
-  priceIdBasic: text("price_id_basic"), // price_... for 500 credits
-  priceIdPro: text("price_id_pro"), // price_... for 1500 credits
-  priceIdBusiness: text("price_id_business"), // price_... for 5000 credits
+  // Credit package price IDs (Updated Dec 2025)
+  priceIdStarter: text("price_id_starter"), // 500 credits - $9.99
+  priceIdBasic: text("price_id_basic"), // 1,500 credits - $24.99
+  priceIdPro: text("price_id_pro"), // 5,000 credits - $69.99
+  priceIdAgency: text("price_id_agency"), // 12,000 credits - $149.99
+  priceIdEnterprise: text("price_id_enterprise"), // 30,000 credits - $349.99
+  // Legacy field (deprecated, kept for backwards compat)
+  priceIdBusiness: text("price_id_business"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
