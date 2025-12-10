@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, CheckCircle, ExternalLink, Instagram, Youtube } from 'lucide-react';
+import { Loader2, CheckCircle, ExternalLink, Instagram, Youtube, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { getAuthHeaders } from '@/lib/queryClient';
 
@@ -50,6 +50,11 @@ const platformIcons: Record<string, any> = {
       <path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.815 2.736 3.713 3.66 6.383 3.364.136-.02.275-.039.415-.056-.138.022-.276.04-.415.056-3.912.58-7.387 2.005-2.83 7.078 5.013 5.19 6.87-1.113 7.823-4.308.953 3.195 2.05 9.271 7.733 4.308 4.267-4.308 1.172-6.498-2.74-7.078a8.741 8.741 0 0 1-.415-.056c.14.017.279.036.415.056 2.67.297 5.568-.628 6.383-3.364.246-.828.624-5.79.624-6.478 0-.69-.139-1.861-.902-2.206-.659-.298-1.664-.62-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8z"/>
     </svg>
   ),
+  google_business: () => (
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 11.5a2.5 2.5 0 110 5 2.5 2.5 0 010-5zm0-9.5c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2zm0 2a8 8 0 00-5.658 13.657l1.414-1.414A6 6 0 1118 12h-2a4 4 0 10-4 4v2a6 6 0 110-12z"/>
+    </svg>
+  ),
 };
 
 // Platform colors
@@ -57,20 +62,24 @@ const platformColors: Record<string, string> = {
   instagram: 'bg-gradient-to-r from-purple-500 to-pink-500',
   tiktok: 'bg-black',
   youtube: 'bg-red-600',
-  facebook: 'bg-blue-600',
+  facebook: 'bg-[#1877F2]',
   twitter: 'bg-black',
-  linkedin: 'bg-blue-700',
+  linkedin: 'bg-[#0A66C2]',
   threads: 'bg-black',
   pinterest: 'bg-red-700',
   reddit: 'bg-orange-600',
   bluesky: 'bg-sky-500',
+  google_business: 'bg-[#1A73E8]',
 };
 
 // Available platforms to connect
 const AVAILABLE_PLATFORMS = [
-  { id: 'instagram', name: 'Instagram', description: 'Connect your Instagram Business account' },
-  { id: 'tiktok', name: 'TikTok', description: 'Connect your TikTok account' },
-  { id: 'youtube', name: 'YouTube', description: 'Connect your YouTube channel' },
+  { id: 'instagram', name: 'Instagram', description: 'Connect your Instagram Business account', supportsPosting: true },
+  { id: 'tiktok', name: 'TikTok', description: 'Connect your TikTok account', supportsPosting: true },
+  { id: 'youtube', name: 'YouTube', description: 'Connect your YouTube channel', supportsPosting: true },
+  { id: 'facebook', name: 'Facebook', description: 'Connect your Facebook Page', supportsPosting: true },
+  { id: 'linkedin', name: 'LinkedIn', description: 'Connect your LinkedIn profile or company page', supportsPosting: true },
+  { id: 'google_business', name: 'Google Business', description: 'Connect your Google Business Profile', supportsPosting: true },
 ];
 
 interface ConnectedAccount {
@@ -86,6 +95,7 @@ export default function SocialAccountsPage() {
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
+  const [disconnectingAccount, setDisconnectingAccount] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Fetch connected accounts on mount
@@ -127,6 +137,44 @@ export default function SocialAccountsPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDisconnect = async (accountId: string, platform: string) => {
+    if (!confirm(`Are you sure you want to disconnect your ${platform} account?`)) {
+      return;
+    }
+
+    setDisconnectingAccount(accountId);
+
+    try {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(`/api/social/accounts/${accountId}`, {
+        method: 'DELETE',
+        headers: authHeaders,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to disconnect account');
+      }
+
+      toast({
+        title: 'Account disconnected',
+        description: `Your ${platform} account has been disconnected`,
+      });
+
+      // Refresh accounts list
+      fetchConnectedAccounts();
+    } catch (error: any) {
+      console.error('Error disconnecting account:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to disconnect account',
+        variant: 'destructive',
+      });
+    } finally {
+      setDisconnectingAccount(null);
     }
   };
 
@@ -300,7 +348,9 @@ export default function SocialAccountsPage() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="font-medium capitalize text-white">{account.platform}</p>
+                        <p className="font-medium capitalize text-white">
+                          {account.platform === 'google_business' ? 'Google Business' : account.platform}
+                        </p>
                         <Badge variant="outline" className="text-xs text-green-400 border-green-400">
                           Connected
                         </Badge>
@@ -310,13 +360,28 @@ export default function SocialAccountsPage() {
                       </p>
                     </div>
                   </div>
-                  {account.profilePicture && (
-                    <img
-                      src={account.profilePicture}
-                      alt={account.displayName}
-                      className="w-10 h-10 rounded-full"
-                    />
-                  )}
+                  <div className="flex items-center gap-3">
+                    {account.profilePicture && (
+                      <img
+                        src={account.profilePicture}
+                        alt={account.displayName}
+                        className="w-10 h-10 rounded-full"
+                      />
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDisconnect(account._id, account.platform)}
+                      disabled={disconnectingAccount === account._id}
+                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                    >
+                      {disconnectingAccount === account._id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

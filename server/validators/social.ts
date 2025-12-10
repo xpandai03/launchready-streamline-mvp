@@ -34,9 +34,9 @@ export const postToSocialSchema = z.object({
     .optional(),
 
   platform: z
-    .enum(["instagram"], {
+    .enum(["instagram", "facebook", "linkedin", "tiktok", "youtube", "google_business"], {
       errorMap: () => ({
-        message: "Only Instagram is supported in this version. More platforms coming soon!",
+        message: "Unsupported platform. Supported: instagram, facebook, linkedin, tiktok, youtube, google_business",
       }),
     }),
 
@@ -81,9 +81,36 @@ export const PLATFORM_LIMITS = {
     videoMaxSize: 100 * 1024 * 1024, // 100MB
     requiredFields: ['videoUrl', 'caption'],
   },
-  // Future platforms will be added here
-  // tiktok: { ... },
-  // youtube: { ... },
+  facebook: {
+    maxCaptionLength: 63206,
+    supportedContentTypes: ['post', 'reel', 'story'],
+    videoMaxSize: 4 * 1024 * 1024 * 1024, // 4GB
+    requiredFields: ['videoUrl', 'caption'],
+  },
+  linkedin: {
+    maxCaptionLength: 3000,
+    supportedContentTypes: ['post', 'video'],
+    videoMaxSize: 200 * 1024 * 1024, // 200MB
+    requiredFields: ['videoUrl', 'caption'],
+  },
+  tiktok: {
+    maxCaptionLength: 2200,
+    supportedContentTypes: ['video'],
+    videoMaxSize: 287 * 1024 * 1024, // 287MB
+    requiredFields: ['videoUrl', 'caption'],
+  },
+  youtube: {
+    maxCaptionLength: 5000,
+    supportedContentTypes: ['short', 'video'],
+    videoMaxSize: 256 * 1024 * 1024 * 1024, // 256GB
+    requiredFields: ['videoUrl', 'caption'],
+  },
+  google_business: {
+    maxCaptionLength: 1500,
+    supportedContentTypes: ['post'],
+    videoMaxSize: 75 * 1024 * 1024, // 75MB
+    requiredFields: ['caption'],
+  },
 } as const;
 
 /**

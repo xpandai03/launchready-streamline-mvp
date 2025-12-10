@@ -298,6 +298,180 @@ export const lateService = {
   },
 
   /**
+   * Post content to any supported social platform
+   *
+   * Supported platforms: instagram, facebook, linkedin, tiktok, youtube, google_business
+   *
+   * @param params - Platform, video URL, caption, and optional settings
+   * @param profileId - Late.dev profile ID
+   * @param accountId - Platform account ID
+   * @returns Late API response with post details
+   */
+  async postToSocial(
+    params: {
+      platform: string;
+      videoUrl?: string;
+      imageUrl?: string;
+      caption: string;
+      contentType?: string;
+      scheduledFor?: string;
+    },
+    profileId: string,
+    accountId: string
+  ): Promise<LatePostResponse> {
+    if (!LATE_API_KEY) {
+      throw new Error('LATE_API_KEY is not configured. Please add it to your .env file.');
+    }
+
+    // Validate scheduled timestamp if provided
+    if (params.scheduledFor) {
+      const scheduledDate = new Date(params.scheduledFor);
+      const now = new Date();
+      const oneYearFromNow = new Date();
+      oneYearFromNow.setFullYear(now.getFullYear() + 1);
+
+      if (scheduledDate <= now) {
+        throw new Error('Scheduled time must be in the future');
+      }
+      if (scheduledDate > oneYearFromNow) {
+        throw new Error('Cannot schedule posts more than 1 year in advance');
+      }
+    }
+
+    console.log(`[Late Service] Posting to ${params.platform}:`, {
+      mediaUrl: (params.videoUrl || params.imageUrl || '').substring(0, 50) + '...',
+      caption: params.caption.substring(0, 50),
+      profileId,
+      accountId,
+      isScheduled: !!params.scheduledFor,
+    });
+
+    // Determine media type based on provided URL
+    const mediaItems = [];
+    if (params.videoUrl) {
+      mediaItems.push({ type: 'video', url: params.videoUrl });
+    } else if (params.imageUrl) {
+      mediaItems.push({ type: 'image', url: params.imageUrl });
+    }
+
+    // Platform-specific content type defaults
+    const platformContentTypes: Record<string, string> = {
+      instagram: 'reel',
+      tiktok: 'video',
+      youtube: 'short',
+      facebook: 'post',
+      linkedin: 'post',
+      google_business: 'post',
+    };
+
+    const requestBody = {
+      content: params.caption,
+      profileId,
+      platforms: [
+        {
+          platform: params.platform,
+          accountId,
+          platformSpecificData: {
+            contentType: params.contentType || platformContentTypes[params.platform] || 'post',
+          },
+        },
+      ],
+      mediaItems,
+      ...(params.scheduledFor
+        ? {
+            publishNow: false,
+            scheduledFor: params.scheduledFor,
+            timezone: 'UTC',
+          }
+        : {
+            publishNow: true,
+          }
+      ),
+    };
+
+    console.log('[Late Service] Request body:', JSON.stringify(requestBody, null, 2));
+
+    try {
+      const response = await fetch(`${LATE_BASE_URL}/posts`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LATE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const responseText = await response.text();
+
+      if (responseText.trim() === '') {
+        throw new Error(`Late API returned empty response (HTTP ${response.status})`);
+      }
+
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        throw new Error(`Late API returned invalid JSON (HTTP ${response.status}): ${responseText.substring(0, 200)}`);
+      }
+
+      if (!response.ok) {
+        const errorMessage = data.error || data.message || 'Unknown error from Late API';
+        throw new Error(`Late API Error (${response.status}): ${errorMessage}`);
+      }
+
+      console.log(`[Late Service] Post to ${params.platform} successful:`, {
+        postId: data.post?._id,
+        status: data.post?.status,
+      });
+
+      return data as LatePostResponse;
+    } catch (error) {
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to reach Late.dev API.');
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Disconnect a social account from Late.dev
+   *
+   * @param accountId - The account ID to disconnect
+   * @returns Success status
+   */
+  async disconnectAccount(accountId: string): Promise<boolean> {
+    if (!LATE_API_KEY) {
+      throw new Error('LATE_API_KEY is not configured');
+    }
+
+    console.log('[Late Service] Disconnecting account:', accountId);
+
+    try {
+      const response = await fetch(`${LATE_BASE_URL}/accounts/${accountId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${LATE_API_KEY}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Late Service] Failed to disconnect account:', {
+          status: response.status,
+          error: errorText,
+        });
+        throw new Error(`Failed to disconnect account: ${response.status}`);
+      }
+
+      console.log('[Late Service] Account disconnected successfully');
+      return true;
+    } catch (error) {
+      console.error('[Late Service] Error disconnecting account:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Test connection to Late.dev API
    *
    * Validates that the API key is correct and the service is reachable

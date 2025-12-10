@@ -922,6 +922,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * DELETE /api/social/accounts/:accountId
+   * Disconnect a social account from Late.dev
+   */
+  app.delete("/api/social/accounts/:accountId", requireAuth, async (req, res) => {
+    try {
+      const { accountId } = req.params;
+      const userId = req.userId!;
+
+      console.log('[Social Accounts] Disconnecting account:', { userId, accountId });
+
+      // Verify user has a Late profile
+      const user = await storage.getUser(userId);
+      if (!user?.lateProfileId) {
+        return res.status(400).json({
+          error: 'No Late.dev profile configured',
+        });
+      }
+
+      // Disconnect the account via Late.dev API
+      await lateService.disconnectAccount(accountId);
+
+      console.log('[Social Accounts] Account disconnected successfully:', accountId);
+
+      res.json({
+        success: true,
+        message: 'Account disconnected successfully',
+      });
+    } catch (error: any) {
+      console.error('[Social Accounts] Error disconnecting account:', error);
+      res.status(500).json({
+        error: 'Failed to disconnect account',
+        details: error.message,
+      });
+    }
+  });
+
   // GET /api/videos/:id - Get task details with projects and exports
   app.get("/api/videos/:id", async (req, res) => {
     try {
@@ -1232,20 +1269,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // For now, use the default Instagram account ID until users can connect their own
-      // In the future, this will come from user.lateAccountId
-      const accountId = user.lateAccountId || process.env.INSTAGRAM_ACCOUNT_ID || '6900d2cd8bbca9c10cbfff74';
+      // Get the account ID for the target platform
+      // First, try to get connected accounts and find one for this platform
+      let accountId: string | null = null;
+      try {
+        const accountsData = await lateService.getAccounts(user.lateProfileId);
+        const platformAccount = accountsData.accounts?.find(
+          (acc: any) => acc.platform === platform && acc.isActive
+        );
+        if (platformAccount) {
+          accountId = platformAccount._id;
+          console.log(`[Social Post] Found connected ${platform} account: ${accountId}`);
+        }
+      } catch (accountError) {
+        console.warn(`[Social Post] Could not fetch accounts:`, accountError);
+      }
 
-      // Phase 2: Validate required parameters before posting
+      // Fall back to default Instagram account if no connected account found for Instagram
+      if (!accountId && platform === 'instagram') {
+        accountId = user.lateAccountId || process.env.INSTAGRAM_ACCOUNT_ID || '6900d2cd8bbca9c10cbfff74';
+        console.log(`[Social Post] Using default Instagram account: ${accountId}`);
+      }
+
+      // Validate that we have an account for the platform
       if (!accountId) {
-        console.error(`[Social Post] No Instagram account ID available for user ${req.userId}`);
+        console.error(`[Social Post] No ${platform} account available for user ${req.userId}`);
         return res.status(400).json({
-          error: 'Instagram account ID required',
-          details: 'Please connect your Instagram account or ensure default account is configured'
+          error: `${platform} account required`,
+          details: `Please connect your ${platform} account in the Socials page before posting`
         });
       }
 
-      console.log(`[Social Post] Using Late profile: ${user.lateProfileId}, account: ${accountId}`);
+      console.log(`[Social Post] Using Late profile: ${user.lateProfileId}, platform: ${platform}, account: ${accountId}`);
 
       // Phase 2.5: AI Caption Generation Integration
       let finalCaption = caption || '';
@@ -1342,15 +1397,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         try {
-          const lateResponse = await lateService.postToInstagram(
+          // Use generic postToSocial method for all platforms
+          const lateResponse = await lateService.postToSocial(
             {
+              platform,
               videoUrl: finalVideoUrl,
               caption: finalCaption,
-              contentType: 'reel',
               scheduledFor, // Pass ISO 8601 UTC timestamp to Late.dev
             },
-            user.lateProfileId,  // User's Late profile ID
-            accountId            // Instagram account ID
+            user.lateProfileId!,  // User's Late profile ID
+            accountId             // Platform account ID
           );
 
           // Update social post with Late.dev response (scheduled status)
@@ -1360,7 +1416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             lateResponse: lateResponse as any,
           });
 
-          console.log(`[Social Post] Successfully scheduled post in Late.dev: ${lateResponse.post._id}`);
+          console.log(`[Social Post] Successfully scheduled post to ${platform} in Late.dev: ${lateResponse.post._id}`);
 
           res.json({
             success: true,
@@ -1382,58 +1438,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       } else {
-        // Immediate post: Post to Instagram right away (existing behavior)
+        // Immediate post: Post to platform right away
         // 🔍 DEBUG: Log Late API request payload
         console.log('[Late Debug] Request payload:', {
+          platform,
           videoUrl: finalVideoUrl.substring(0, 80) + '...',
           caption: finalCaption.substring(0, 50) + '...',
-          contentType: 'reel',
           profileId: user.lateProfileId,
           accountId,
         });
 
         try {
-          const lateResponse = await lateService.postToInstagram(
+          // Use generic postToSocial method for all platforms
+          const lateResponse = await lateService.postToSocial(
             {
+              platform,
               videoUrl: finalVideoUrl,
               caption: finalCaption,
-              contentType: 'reel',
             },
-            user.lateProfileId,  // User's Late profile ID
-            accountId            // Instagram account ID
+            user.lateProfileId!,  // User's Late profile ID
+            accountId             // Platform account ID
           );
 
           // Extract platform-specific data
-          const instagramPost = lateResponse.post.platforms.find(
-            (p) => p.platform === 'instagram'
+          const platformPost = lateResponse.post.platforms.find(
+            (p) => p.platform === platform
           );
 
-          const finalStatus = instagramPost?.status === 'published' ? 'published' :
-                             instagramPost?.status === 'failed' ? 'failed' : 'posting';
+          const finalStatus = platformPost?.status === 'published' ? 'published' :
+                             platformPost?.status === 'failed' ? 'failed' : 'posting';
 
           // Update social post with success
           const updatedPost = await storage.updateSocialPost(socialPost.id, {
             status: finalStatus,
             latePostId: lateResponse.post._id,
-            platformPostUrl: instagramPost?.platformPostUrl || null,
+            platformPostUrl: platformPost?.platformPostUrl || null,
             lateResponse: lateResponse as any,
             publishedAt: finalStatus === 'published' ? new Date() : null,
-            errorMessage: instagramPost?.error || null,
+            errorMessage: platformPost?.error || null,
           });
 
-          console.log(`[Social Post] Successfully posted to Instagram: ${instagramPost?.platformPostUrl || 'pending'}`);
+          console.log(`[Social Post] Successfully posted to ${platform}: ${platformPost?.platformPostUrl || 'pending'}`);
 
-          // Increment usage counter (Phase 6: Track social post creation)
           // Deduct credits after successful Late.dev API call (Phase 9: XPAND Credits)
           await creditService.deductCredits(req.userId!, 'social_post', { postId: socialPost.id, platform });
 
           res.json({
             success: true,
             post: updatedPost,
-            platformUrl: instagramPost?.platformPostUrl,
+            platformUrl: platformPost?.platformPostUrl,
             message: finalStatus === 'published'
-              ? "Successfully posted to Instagram!"
-              : "Post is being processed by Instagram",
+              ? `Successfully posted to ${platform}!`
+              : `Post is being processed by ${platform}`,
           });
         } catch (lateError: any) {
           // Update social post with failure
@@ -1535,10 +1591,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Fetch analytics from Late.dev API
+      // Fetch analytics from Late.dev API (all platforms)
       const analyticsData = await lateService.getAnalytics({
         profileId: user.lateProfileId || undefined,
-        platform: 'instagram', // Filter to Instagram for now
+        // Don't filter by platform - get all platforms
         limit: 50,
         sortBy: 'date',
         order: 'desc',
