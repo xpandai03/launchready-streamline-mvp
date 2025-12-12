@@ -2707,18 +2707,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const pollInterval = 15000; // 15 seconds (faster detection)
     const timeoutMs = 3 * 60 * 1000; // 3 minutes hard timeout
     const startTime = Date.now();
-    const maxRetries = 3;
+    // ✅ STABILIZATION: Single attempt for Sora2 (fallback handles failures), retry for others
+    const maxRetries = (params.provider === 'sora2') ? 1 : 2;
     let retryCount = 0;
 
     // ✅ LIFECYCLE LOG: Job started
     console.log(`[ugc] job_created id=${assetId} provider=${params.provider} mode=direct`);
 
     try {
-      // Step 1: Start generation
+      // Step 1: Start generation (single attempt for Sora2, limited retries for others)
       let generationResult;
       let lastError: Error | null = null;
 
-      // Retry loop for initial generation
       while (retryCount < maxRetries) {
         try {
           generationResult = await generateMedia(params);
@@ -2734,16 +2734,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error(`[Media Generation] Attempt ${retryCount}/${maxRetries} failed:`, error);
 
           if (retryCount < maxRetries) {
-            const backoffDelay = retryCount * 2000; // 2s, 4s, 6s
-            console.log(`[Media Generation] Retrying in ${backoffDelay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
       }
 
-      // If all retries failed
+      // If initial generation failed
       if (!generationResult) {
-        throw lastError || new Error('Failed to start generation after retries');
+        throw lastError || new Error('Failed to start generation');
       }
 
       // Update asset with taskId
@@ -2764,78 +2762,159 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      // ✅ FIX: Sora2 now uses polling WITH timeout failsafe
-      // Previously: relied on webhooks only, which could hang forever if webhook fails
-      // Now: poll with timeout, webhook can still update status early
+      // ✅ STABILIZATION: Sora2 with automatic Veo3 fallback
+      // If Sora2 fails for any reason, automatically fall back to Veo3
       if (params.provider === 'sora2' || generationResult.provider === 'kie-sora2') {
-        console.log(`[ugc] poll_start id=${assetId} provider=sora2 max_time=180s`);
+        console.log(`[ugc] start job=${assetId} mode=sora2`);
 
-        // Set a hard timeout for Sora2 jobs (3 minutes)
-        const sora2TimeoutMs = 3 * 60 * 1000;
-        let sora2PollAttempts = 0;
-        const sora2MaxAttempts = 12; // 12 * 15s = 3 minutes
+        // Helper: Fallback to Veo3 when Sora2 fails
+        const fallbackToVeo3 = async (reason: string) => {
+          console.log(`[ugc] sora2_failed reason=${reason}`);
+          console.log(`[ugc] fallback_to_veo3 job=${assetId}`);
 
-        while (sora2PollAttempts < sora2MaxAttempts) {
-          const elapsed = Date.now() - startTime;
-          const elapsedSeconds = Math.round(elapsed / 1000);
+          // Update metadata to track fallback
+          const currentAsset = await storage.getMediaAsset(assetId);
+          await storage.updateMediaAsset(assetId, {
+            provider: 'kie-veo3',
+            status: 'processing',
+            errorMessage: null,
+            metadata: {
+              ...(currentAsset?.metadata || {}),
+              fallbackFrom: 'sora2',
+              fallbackTo: 'veo3-only',
+              fallbackReason: reason,
+            },
+          });
 
-          if (elapsed > sora2TimeoutMs) {
-            console.log(`[ugc] job_timeout id=${assetId} after=${elapsedSeconds}s reason=sora2_timeout`);
+          // Clamp duration for Veo3 (max 20s for text-to-video)
+          const veo3Duration = Math.min(params.options?.duration || 10, 20);
+
+          // Generate with Veo3 instead
+          try {
+            const veo3Result = await generateMedia({
+              provider: 'kie-veo3',
+              type: 'video',
+              prompt: params.prompt,
+              referenceImageUrl: params.referenceImageUrl,
+              options: {
+                duration: veo3Duration,
+                model: 'veo3',
+              },
+            });
+
+            // Update taskId to Veo3 task
+            await storage.updateMediaAsset(assetId, {
+              taskId: veo3Result.taskId,
+            });
+
+            // Poll Veo3 for completion (reuse existing Veo3 polling logic)
+            const veo3TimeoutMs = 3 * 60 * 1000;
+            const veo3StartTime = Date.now();
+            let veo3Attempts = 0;
+
+            while (veo3Attempts < 12) {
+              const elapsed = Date.now() - veo3StartTime;
+              if (elapsed > veo3TimeoutMs) {
+                console.log(`[ugc] veo3_fallback_timeout job=${assetId}`);
+                await storage.updateMediaAsset(assetId, {
+                  status: 'error',
+                  errorMessage: 'Fallback provider also timed out.',
+                });
+                return;
+              }
+
+              await new Promise(resolve => setTimeout(resolve, 15000));
+              veo3Attempts++;
+
+              try {
+                const veo3Status = await checkMediaStatus(veo3Result.taskId, 'kie-veo3');
+                if (veo3Status.status === 'ready' && veo3Status.resultUrl) {
+                  await storage.updateMediaAsset(assetId, {
+                    status: 'ready',
+                    resultUrl: veo3Status.resultUrl,
+                    resultUrls: veo3Status.resultUrls,
+                    completedAt: new Date(),
+                  });
+                  console.log(`[ugc] completed job=${assetId} mode=veo3-only (fallback)`);
+                  return;
+                }
+                if (veo3Status.status === 'failed') {
+                  await storage.updateMediaAsset(assetId, {
+                    status: 'error',
+                    errorMessage: 'Fallback provider failed.',
+                  });
+                  return;
+                }
+              } catch (e: any) {
+                console.log(`[ugc] veo3_poll_error job=${assetId} error=${e.message}`);
+              }
+            }
+
+            // Veo3 max attempts
             await storage.updateMediaAsset(assetId, {
               status: 'error',
-              errorMessage: 'Provider timeout. Please try again.',
+              errorMessage: 'Fallback provider timed out.',
             });
+          } catch (veo3Err: any) {
+            console.log(`[ugc] veo3_fallback_failed job=${assetId} error=${veo3Err.message}`);
+            await storage.updateMediaAsset(assetId, {
+              status: 'error',
+              errorMessage: `Fallback failed: ${veo3Err.message}`,
+            });
+          }
+        };
+
+        // Sora2 polling with 180s hard timeout, single attempt
+        const sora2TimeoutMs = 180 * 1000;
+        let sora2PollAttempts = 0;
+
+        while (sora2PollAttempts < 12) {
+          const elapsed = Date.now() - startTime;
+
+          if (elapsed > sora2TimeoutMs) {
+            await fallbackToVeo3('timeout');
             return;
           }
 
-          await new Promise(resolve => setTimeout(resolve, pollInterval));
+          await new Promise(resolve => setTimeout(resolve, 15000));
           sora2PollAttempts++;
 
-          // Check if webhook already updated the status
+          // Check DB status (webhook may have updated)
           const currentAsset = await storage.getMediaAsset(assetId);
-          console.log(`[ugc] poll_status id=${assetId} status=${currentAsset?.status} elapsed=${elapsedSeconds}s`);
 
           if (currentAsset?.status === 'ready') {
-            console.log(`[ugc] job_completed id=${assetId} elapsed=${elapsedSeconds}s`);
+            console.log(`[ugc] completed job=${assetId} mode=sora2`);
             return;
           }
           if (currentAsset?.status === 'error' || currentAsset?.status === 'failed') {
-            console.log(`[ugc] job_failed id=${assetId} reason=${currentAsset?.errorMessage || 'unknown'}`);
+            await fallbackToVeo3(currentAsset?.errorMessage || 'provider_error');
             return;
           }
 
-          // Also poll KIE directly in case webhook is delayed
+          // Poll KIE directly
           try {
             const statusResult = await checkMediaStatus(generationResult.taskId, 'kie-sora2' as any);
             if (statusResult.status === 'ready' && statusResult.resultUrl) {
               await storage.updateMediaAsset(assetId, {
                 status: 'ready',
                 resultUrl: statusResult.resultUrl,
+                resultUrls: statusResult.resultUrls,
                 completedAt: new Date(),
               });
-              console.log(`[ugc] job_completed id=${assetId} elapsed=${elapsedSeconds}s (via poll)`);
+              console.log(`[ugc] completed job=${assetId} mode=sora2`);
               return;
             }
             if (statusResult.status === 'failed') {
-              await storage.updateMediaAsset(assetId, {
-                status: 'error',
-                errorMessage: statusResult.metadata?.errorMessage || 'Provider error',
-              });
-              console.log(`[ugc] job_failed id=${assetId} reason=sora2_provider_error`);
+              await fallbackToVeo3('sora2_provider_failed');
               return;
             }
           } catch (pollErr: any) {
-            console.log(`[ugc] poll_error id=${assetId} error=${pollErr.message}`);
-            // Continue polling, don't fail immediately
+            // Continue polling unless timeout
           }
         }
 
-        // Max attempts reached
-        console.log(`[ugc] job_timeout id=${assetId} after=${Math.round((Date.now() - startTime)/1000)}s reason=sora2_max_attempts`);
-        await storage.updateMediaAsset(assetId, {
-          status: 'error',
-          errorMessage: 'Provider timeout. Please try again.',
-        });
+        // Max attempts without success → fallback
+        await fallbackToVeo3('max_attempts');
         return;
       }
 
