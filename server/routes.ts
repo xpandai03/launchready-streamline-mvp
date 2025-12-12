@@ -56,13 +56,24 @@ const processVideoAdvancedSchema = z.object({
 
 // Phase 4: UGC Preset Generation Schema
 // Duration limits per mode - PROVIDER HARD LIMITS:
-// - Mode A (nanobana+veo3): Provider hard-caps image-to-video at ~8s
-// - Mode B (veo3-only): Direct Veo3 supports up to 20s
-// - Mode C (sora2): KIE only supports n_frames "10" or "15" (not "25")
+//
+// Mode A (nanobana+veo3): 8s max
+//   - Always uses NanoBanana image → Veo3 image-to-video
+//   - Provider hard-caps image-to-video at ~8s
+//
+// Mode B (veo3-only): 20s max
+//   - With product image + duration ≤8s: Uses image-to-video (image in video)
+//   - With product image + duration >8s: Auto-switches to text-to-video (image NOT used)
+//   - Without product image: Uses text-to-video (supports up to 20s)
+//
+// Mode C (sora2): 15s max
+//   - Uses n_frames field: only "10" (10s) or "15" (15s) supported
+//   - "25" is only for sora-2-pro-storyboard (not used here)
+//
 const MODE_DURATION_LIMITS: Record<string, number> = {
   'nanobana+veo3': 8,  // Provider hard-cap for image-to-video
-  'veo3-only': 20,
-  'sora2': 15,         // KIE sora-2-* models don't support n_frames "25"
+  'veo3-only': 20,     // Text-to-video supports 20s; image-to-video auto-switches at 8s
+  'sora2': 15,         // KIE sora-2-* models: n_frames "10" or "15" only
 };
 
 const generateUGCPresetSchema = z.object({

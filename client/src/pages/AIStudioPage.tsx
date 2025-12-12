@@ -526,7 +526,12 @@ export default function AIStudioPage() {
                   })}
                 </div>
                 <p className="text-xs text-white/50">
-                  Max duration: Premium (8s), Fast (20s), Budget (15s). Longer videos available in Fast mode.
+                  Max duration: Premium (8s), Fast (20s), Budget (15s).
+                  {generationMode === 'veo3-only' && videoDuration > 8 && (
+                    <span className="text-yellow-400/80 ml-1">
+                      Note: Product image won't be used for videos &gt;8s.
+                    </span>
+                  )}
                 </p>
               </div>
 

@@ -2,15 +2,23 @@
  * KIE.ai Media Generation Service
  *
  * Supports:
- * - Veo3 video generation (duration in seconds, 6-20s)
- * - Sora2 video generation (n_frames: "10" or "15" for non-storyboard models)
+ * - Veo3 video generation
+ * - Sora2 video generation
  * - 4O Image generation
  * - Flux Kontext image generation
  *
- * IMPORTANT - Model-specific duration handling:
- * - Veo3: Uses `duration` field (numeric, in seconds, 6-20s)
- * - Sora2 (sora-2-image-to-video, sora-2-text-to-video): Uses `n_frames` field
- *   Only "10" (10s) and "15" (15s) are supported - NOT "25"!
+ * CRITICAL - Duration limits by provider and mode:
+ *
+ * VEO3:
+ * - Text-to-video (no imageUrls): Supports 6-20s via `duration` field
+ * - Image-to-video (with imageUrls): HARD-CAPPED at ~8s by provider!
+ *   The `duration` field is IGNORED when imageUrls is provided.
+ *   This service auto-switches to text-to-video if duration > 8s.
+ *
+ * SORA2 (sora-2-image-to-video, sora-2-text-to-video):
+ * - Uses `n_frames` field (NOT duration!)
+ * - Only "10" (10s) and "15" (15s) are supported - NOT "25"!
+ * - "25" is only for sora-2-pro-storyboard model
  *
  * Documentation: https://docs.kie.ai/
  */
@@ -393,6 +401,19 @@ export const kieService = {
       // Duration in seconds for Veo3 (default to 10)
       const durationValue = params.duration || 10;
 
+      // ✅ CRITICAL FIX: Veo3 image-to-video is hard-capped at ~8s by the provider
+      // If user requests >8s with an image, we must use text-to-video mode instead
+      // This allows longer videos at the cost of not using the reference image
+      const VEO3_IMAGE_TO_VIDEO_MAX_DURATION = 8;
+      let effectiveImageUrls = publicImageUrls;
+
+      if (publicImageUrls && publicImageUrls.length > 0 && durationValue > VEO3_IMAGE_TO_VIDEO_MAX_DURATION) {
+        console.log(`[KIE Service] ⚠️ Duration ${durationValue}s exceeds Veo3 image-to-video limit (${VEO3_IMAGE_TO_VIDEO_MAX_DURATION}s)`);
+        console.log(`[KIE Service] ⚠️ Switching to text-to-video mode (image URLs will NOT be used)`);
+        console.log(`[KIE Service] ⚠️ For image-based videos, use duration ≤${VEO3_IMAGE_TO_VIDEO_MAX_DURATION}s`);
+        effectiveImageUrls = undefined; // Don't pass images for longer videos
+      }
+
       // ✅ CRITICAL: Veo3 uses `duration` (numeric), NOT n_frames
       // Do NOT include n_frames field for Veo3 - it will cause API errors
       requestBody = {
@@ -400,16 +421,26 @@ export const kieService = {
         model: model,
         aspectRatio: params.aspectRatio || '16:9',
         duration: durationValue, // ✅ Veo3 accepts numeric duration (6-20 seconds)
-        ...(publicImageUrls && { imageUrls: publicImageUrls }),
+        ...(effectiveImageUrls && { imageUrls: effectiveImageUrls }),
       };
 
+      // ✅ Enhanced logging for debugging duration issues
+      const generationMode = effectiveImageUrls ? 'image-to-video' : 'text-to-video';
       console.log('[KIE Service] Generating Veo3 video:', {
-        prompt: params.prompt.substring(0, 50) + '...',
+        prompt: params.prompt.substring(0, 100) + '...',
         model,
         aspectRatio: params.aspectRatio || '16:9',
-        duration: durationValue + 's',
-        imageUrls: publicImageUrls?.map(url => url.substring(0, 60) + '...'),
+        requestedDuration: durationValue + 's',
+        generationMode,
+        imageUrlsProvided: !!publicImageUrls,
+        imageUrlsUsed: !!effectiveImageUrls,
+        note: effectiveImageUrls
+          ? `Image-to-video mode (max ~${VEO3_IMAGE_TO_VIDEO_MAX_DURATION}s output expected)`
+          : `Text-to-video mode (should support up to 20s)`,
       });
+
+      // Log the exact request body being sent (for debugging)
+      console.log('[KIE Service] Veo3 request body:', JSON.stringify(requestBody, null, 2));
     }
 
     const response = await fetch(endpoint, {
