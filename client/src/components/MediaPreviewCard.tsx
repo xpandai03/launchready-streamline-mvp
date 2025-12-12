@@ -63,9 +63,10 @@ interface MediaAsset {
 interface MediaPreviewCardProps {
   asset: MediaAsset;
   onClick?: () => void;
+  onDeleteSuccess?: () => void; // ✅ Callback to notify parent when delete succeeds
 }
 
-export function MediaPreviewCard({ asset, onClick }: MediaPreviewCardProps) {
+export function MediaPreviewCard({ asset, onClick, onDeleteSuccess }: MediaPreviewCardProps) {
   const [showPostModal, setShowPostModal] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -106,6 +107,8 @@ export function MediaPreviewCard({ asset, onClick }: MediaPreviewCardProps) {
         title: 'Deleted',
         description: 'UGC ad removed from your gallery',
       });
+      // ✅ Notify parent to close any open modal for this asset
+      onDeleteSuccess?.();
     },
     onError: (error: Error) => {
       // Revert fade-out if delete failed

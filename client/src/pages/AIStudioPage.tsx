@@ -625,6 +625,13 @@ export default function AIStudioPage() {
                     console.log('[AIStudio] Card clicked, setting selectedAsset:', asset.id);
                     setSelectedAsset(asset);
                   }}
+                  onDeleteSuccess={() => {
+                    // ✅ Close modal if deleted asset was the selected one
+                    if (selectedAsset?.id === asset.id) {
+                      console.log('[AIStudio] Deleted asset was selected, closing modal');
+                      setSelectedAsset(null);
+                    }
+                  }}
                 />
               ))}
             </div>
