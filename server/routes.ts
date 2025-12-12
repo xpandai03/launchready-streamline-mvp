@@ -2035,12 +2035,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         duration, // Used in video prompt templates for accurate duration instructions
       };
 
-      console.log('[AI UGC Preset] Generating prompt with variables:', promptVariables);
+      // ✅ Debug: Log duration explicitly to verify it's being passed
+      console.log(`[ugc] prompt_gen mode=${generationMode} duration=${duration}s`);
 
       // Generate prompt using preset templates
       const generatedPrompt = generatePrompt(generationMode as GenerationMode, promptVariables);
 
-      console.log('[AI UGC Preset] Generated prompt (first 100 chars):', generatedPrompt.substring(0, 100));
+      // ✅ Debug: Log first 150 chars to verify duration in prompt text
+      console.log(`[ugc] prompt_preview: ${generatedPrompt.substring(0, 150)}...`);
 
       // Determine provider based on mode
       let provider: string;

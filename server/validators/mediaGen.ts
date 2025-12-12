@@ -57,7 +57,7 @@ export const PROVIDER_CAPABILITIES = {
   "kie-veo3": {
     supportedTypes: ['video'],
     maxPromptLength: 1000,
-    maxDuration: 8, // seconds
+    maxDuration: 20, // seconds (text-to-video supports up to 20s; image-to-video auto-capped at 8s in kie.ts)
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
   },
   "kie-4o-image": {
