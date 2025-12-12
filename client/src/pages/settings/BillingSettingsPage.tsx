@@ -124,7 +124,7 @@ export default function BillingSettingsPage() {
           <div>
             <h1 className="text-3xl font-bold text-white">Credits & Billing</h1>
             <p className="text-gray-400 mt-1">
-              Purchase credits to use Streamline AI features
+              Purchase credits to use Prosper UGC features
             </p>
           </div>
           <div className="flex items-center gap-3">

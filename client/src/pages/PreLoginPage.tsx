@@ -83,7 +83,7 @@ const PreLoginPage = () => {
         transition={{ duration: 0.88, delay: 1.5 }}
       >
         <p className="text-5xl md:text-7xl z-50 text-white font-bold italic">
-          Streamline.
+          Prosper UGC Studio
         </p>
         <button
           onClick={handleGetStarted}

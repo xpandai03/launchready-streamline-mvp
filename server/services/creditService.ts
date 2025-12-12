@@ -22,8 +22,8 @@ import {
 } from '@shared/schema';
 import { eq, desc, sql } from 'drizzle-orm';
 
-// Default credits for new users (increased from 50 to 2000)
-const DEFAULT_NEW_USER_CREDITS = 2000;
+// Default credits for new users (Prosper UGC Studio: 5000)
+const DEFAULT_NEW_USER_CREDITS = 5000;
 
 /**
  * Get user's current credit balance

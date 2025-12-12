@@ -189,7 +189,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-blue-500"
+                className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-green-500"
               />
             </div>
 
@@ -203,13 +203,13 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading}
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-blue-500"
+                className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-green-500"
               />
             </div>
 
             <Button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              className="w-full bg-green-600 hover:bg-green-700 text-white"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -225,7 +225,7 @@ export default function LoginPage() {
             <p className="text-sm text-center text-white/70">
               Don't have an account?{' '}
               <Link href="/auth/signup">
-                <a className="text-blue-400 hover:text-blue-300 font-medium cursor-pointer">
+                <a className="text-green-400 hover:text-green-300 font-medium cursor-pointer">
                   Sign up
                 </a>
               </Link>

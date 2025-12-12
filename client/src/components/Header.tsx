@@ -25,7 +25,7 @@ export function Header() {
         <Link href="/">
           <a className="text-2xl font-bold text-primary flex items-center gap-2">
             <Video className="h-6 w-6" />
-            Streamline
+            ProsperUGC
           </a>
         </Link>
 

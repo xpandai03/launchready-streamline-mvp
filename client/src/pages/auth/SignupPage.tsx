@@ -178,7 +178,7 @@ export default function SignupPage() {
           <div className="mb-6">
             <h2 className="text-3xl font-bold text-white mb-2">Create an account</h2>
             <p className="text-white/70 text-sm">
-              Enter your details to get started with Streamline
+              Enter your details to get started with Prosper UGC Studio
             </p>
           </div>
 
@@ -205,7 +205,7 @@ export default function SignupPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-blue-500"
+                className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-green-500"
               />
             </div>
 
@@ -220,7 +220,7 @@ export default function SignupPage() {
                 required
                 disabled={isLoading}
                 minLength={6}
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-blue-500"
+                className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-green-500"
               />
             </div>
 
@@ -235,7 +235,7 @@ export default function SignupPage() {
                 required
                 disabled={isLoading}
                 minLength={6}
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-blue-500"
+                className="bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-green-500"
               />
             </div>
 
@@ -245,7 +245,7 @@ export default function SignupPage() {
 
             <Button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              className="w-full bg-green-600 hover:bg-green-700 text-white"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -261,7 +261,7 @@ export default function SignupPage() {
             <p className="text-sm text-center text-white/70">
               Already have an account?{' '}
               <Link href="/auth/login">
-                <a className="text-blue-400 hover:text-blue-300 font-medium cursor-pointer">
+                <a className="text-green-400 hover:text-green-300 font-medium cursor-pointer">
                   Login
                 </a>
               </Link>

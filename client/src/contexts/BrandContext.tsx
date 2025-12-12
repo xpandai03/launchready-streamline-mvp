@@ -19,7 +19,7 @@ interface BrandContextType {
 
 const BrandContext = createContext<BrandContextType | undefined>(undefined);
 
-const DEFAULT_APP_NAME = 'Streamline';
+const DEFAULT_APP_NAME = 'ProsperUGC';
 
 export function BrandProvider({ children }: { children: ReactNode }) {
   const [appName, setAppName] = useState<string>(DEFAULT_APP_NAME);

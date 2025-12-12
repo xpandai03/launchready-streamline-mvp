@@ -320,7 +320,7 @@ export default function SocialAccountsPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">Social Accounts</h1>
           <p className="text-gray-400 mt-2">
-            Connect your social media accounts to post directly from Streamline
+            Connect your social media accounts to post directly from Prosper UGC
           </p>
         </div>
 
@@ -453,7 +453,7 @@ export default function SocialAccountsPage() {
         {/* Help Text */}
         <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
           <p className="text-sm text-blue-400">
-            <strong>Note:</strong> You'll be redirected to authorize Streamline to post on your behalf.
+            <strong>Note:</strong> You'll be redirected to authorize Prosper UGC to post on your behalf.
             We'll never post without your explicit permission.
           </p>
         </div>

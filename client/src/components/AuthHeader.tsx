@@ -9,8 +9,8 @@ export function AuthHeader() {
         {/* Logo */}
         <Link href="/welcome">
           <a className="flex items-center space-x-2 text-white hover:opacity-80 transition-opacity cursor-pointer">
-            <Video className="h-6 w-6 text-blue-500" />
-            <span className="text-xl font-bold">Streamline</span>
+            <Video className="h-6 w-6 text-green-500" />
+            <span className="text-xl font-bold">ProsperUGC</span>
           </a>
         </Link>
 
@@ -27,7 +27,7 @@ export function AuthHeader() {
             </a>
           </Link>
           <Link href="/auth/signup">
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button className="bg-green-600 hover:bg-green-700 text-white">
               Sign up
             </Button>
           </Link>
