@@ -25,6 +25,7 @@ export interface PromptVariables {
   features: string;     // Key features (e.g., "30g protein, chocolate flavor, keto-friendly")
   icp: string;          // Ideal customer persona (e.g., "Fitness enthusiast in their 20s-30s")
   scene: string;        // Video setting (e.g., "Modern gym", "Kitchen counter", "Office desk")
+  duration?: number;    // Video duration in seconds (default: 10)
 }
 
 export interface PromptTemplate {
@@ -62,15 +63,16 @@ OUTPUT: A single photorealistic image that looks like a real person took a selfi
 /**
  * Mode A: Veo3 Video Prompt (After NanoBanana Image Analysis)
  * Note: This template uses {imageAnalysis} from OpenAI Vision instead of standard variables
+ * Duration is dynamic via {duration} variable
  */
 export const VIDEO_PROMPT_VEO3_CHAINED: PromptTemplate = {
   systemRole: "You are an expert UGC video creator specializing in authentic, influencer-style product demonstrations.",
-  template: `Create an 8-second selfie-style UGC video based on this reference image:
+  template: `Create a {duration}-second selfie-style UGC video based on this reference image:
 
 IMAGE ANALYSIS: {imageAnalysis}
 
 VIDEO SPECIFICATIONS:
-- Duration: Exactly 8 seconds
+- Duration: Exactly {duration} seconds
 - Style: Handheld selfie video (slight natural shake is good)
 - Camera: iPhone 15 Pro quality
 - Audio: Person speaks naturally to camera in casual, friendly tone
@@ -94,10 +96,11 @@ IMPORTANT: Maintain visual consistency with the reference image (same person, si
 /**
  * Mode B: Veo3 Video Prompt (Direct, No Reference Image)
  * Standalone video generation without NanoBanana chain
+ * Duration is dynamic via {duration} variable
  */
 export const VIDEO_PROMPT_VEO3_DIRECT: PromptTemplate = {
   systemRole: "You are an expert UGC video creator specializing in authentic, influencer-style product demonstrations.",
-  template: `Create an 8-second selfie-style UGC product video with the following specifications:
+  template: `Create a {duration}-second selfie-style UGC product video with the following specifications:
 
 SUBJECT: {icp}
 PRODUCT: {product}
@@ -105,7 +108,7 @@ FEATURES TO MENTION: {features}
 SETTING: {scene}
 
 VIDEO REQUIREMENTS:
-- Duration: Exactly 8 seconds
+- Duration: Exactly {duration} seconds
 - Style: Handheld selfie video (natural camera shake expected)
 - Camera: iPhone 15 Pro quality (realistic, not overproduced)
 - Lighting: Natural daylight or soft indoor light
@@ -129,10 +132,11 @@ IMPORTANT: Must feel like genuine UGC content, not a professional commercial. Im
 /**
  * Mode C: Sora 2 Video Prompt
  * Cheaper alternative with similar UGC style
+ * Duration is dynamic via {duration} variable (Sora2 supports 10s or 15s only)
  */
 export const VIDEO_PROMPT_SORA2: PromptTemplate = {
   systemRole: "You are a UGC video creator for social media ads, optimizing for Sora 2's strengths in natural motion and realistic dialogue.",
-  template: `Generate an 8-second vertical selfie video for social media:
+  template: `Generate a {duration}-second vertical selfie video for social media:
 
 SUBJECT: {icp} filming themselves with {product}
 LOCATION: {scene}
@@ -140,12 +144,13 @@ KEY FEATURES: {features}
 
 VIDEO STYLE:
 - Vertical 9:16 format (TikTok/Instagram Reels)
+- Duration: {duration} seconds
 - Handheld selfie (natural shake, not stabilized)
 - Natural lighting (avoid harsh shadows)
 - Casual, authentic vibe
 
 CONTENT:
-Person holds phone in one hand, {product} in the other. They speak directly to camera for 8 seconds, casually explaining why they love {product}, specifically mentioning {features}. Tone is friendly and genuine, like talking to a friend.
+Person holds phone in one hand, {product} in the other. They speak directly to camera for {duration} seconds, casually explaining why they love {product}, specifically mentioning {features}. Tone is friendly and genuine, like talking to a friend.
 
 DIALOGUE EXAMPLE:
 "Hey! So I've been using {product} and honestly it's been amazing. {features} - like, way better than what I was using before. Definitely recommend trying it!"
@@ -184,7 +189,7 @@ export function sanitizeString(str: string): string {
 
 /**
  * Inject variables into prompt template
- * Replaces {product}, {features}, {icp}, {scene} with actual values
+ * Replaces {product}, {features}, {icp}, {scene}, {duration} with actual values
  */
 export function injectVariables(
   template: string,
@@ -197,6 +202,7 @@ export function injectVariables(
   result = result.replace(/{features}/g, vars.features);
   result = result.replace(/{icp}/g, vars.icp);
   result = result.replace(/{scene}/g, vars.scene);
+  result = result.replace(/{duration}/g, String(vars.duration || 10)); // Default 10s
 
   return result;
 }
@@ -208,7 +214,7 @@ export function injectVariables(
 export function injectImageAnalysis(
   template: string,
   imageAnalysis: string,
-  vars: Pick<PromptVariables, 'icp' | 'product' | 'features' | 'scene'>
+  vars: Pick<PromptVariables, 'icp' | 'product' | 'features' | 'scene' | 'duration'>
 ): string {
   let result = template;
 
@@ -220,6 +226,7 @@ export function injectImageAnalysis(
   result = result.replace(/{product}/g, vars.product);
   result = result.replace(/{features}/g, vars.features);
   result = result.replace(/{scene}/g, vars.scene);
+  result = result.replace(/{duration}/g, String(vars.duration || 10)); // Default 10s
 
   return result;
 }

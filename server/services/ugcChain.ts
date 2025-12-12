@@ -224,13 +224,25 @@ export const ugcChainService = {
       }
 
       const chainMetadata = asset.chainMetadata as ChainMetadata;
-      const promptVariables = (asset.metadata && typeof asset.metadata === 'object' && 'promptVariables' in asset.metadata
+      const storedPromptVariables = (asset.metadata && typeof asset.metadata === 'object' && 'promptVariables' in asset.metadata
         ? asset.metadata.promptVariables
         : undefined) as PromptVariables | undefined;
 
-      if (!promptVariables) {
+      if (!storedPromptVariables) {
         throw new Error('Missing promptVariables in asset metadata');
       }
+
+      // Ensure duration is included (may be stored separately in older assets)
+      const storedDuration = (asset.metadata && typeof asset.metadata === 'object' && 'duration' in asset.metadata
+        ? (asset.metadata as any).duration
+        : undefined) as number | undefined;
+
+      const promptVariables: PromptVariables = {
+        ...storedPromptVariables,
+        duration: storedPromptVariables.duration || storedDuration || 10, // Ensure duration is set
+      };
+
+      console.log(`[UGC Chain] Step 3: Using duration: ${promptVariables.duration}s for video prompt`);
 
       // Update chain metadata: analyzing image
       chainMetadata.step = 'analyzing_image';
@@ -444,13 +456,25 @@ Be specific and detailed - this description will be used to create a video based
       }
 
       const chainMetadata = asset.chainMetadata as ChainMetadata;
-      const promptVariables = (asset.metadata && typeof asset.metadata === 'object' && 'promptVariables' in asset.metadata
+      const storedPromptVariables = (asset.metadata && typeof asset.metadata === 'object' && 'promptVariables' in asset.metadata
         ? asset.metadata.promptVariables
         : undefined) as PromptVariables | undefined;
 
-      if (!promptVariables) {
+      if (!storedPromptVariables) {
         throw new Error('Missing promptVariables in asset metadata');
       }
+
+      // Ensure duration is included (may be stored separately in older assets)
+      const storedDuration = (asset.metadata && typeof asset.metadata === 'object' && 'duration' in asset.metadata
+        ? (asset.metadata as any).duration
+        : undefined) as number | undefined;
+
+      const promptVariables: PromptVariables = {
+        ...storedPromptVariables,
+        duration: storedPromptVariables.duration || storedDuration || 10, // Ensure duration is set
+      };
+
+      console.log(`[UGC Chain Fallback] Using duration: ${promptVariables.duration}s for video prompt`);
 
       // Update chain metadata: mark as fallback
       chainMetadata.step = 'fallback_to_veo3';

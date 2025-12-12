@@ -2005,12 +2005,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Convert form values to prompt variables
+      // Convert form values to prompt variables (including duration for dynamic prompts)
       const promptVariables = {
         product: productName,
         features: productFeatures,
         icp: formatICPForPrompt(customerPersona),
         scene: formatSceneForPrompt(videoSetting),
+        duration, // Used in video prompt templates for accurate duration instructions
       };
 
       console.log('[AI UGC Preset] Generating prompt with variables:', promptVariables);
