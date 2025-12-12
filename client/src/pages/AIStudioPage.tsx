@@ -526,7 +526,7 @@ export default function AIStudioPage() {
                   })}
                 </div>
                 <p className="text-xs text-white/50">
-                  Max duration varies by mode: Veo3 modes support up to 20s, Sora2 supports up to 25s
+                  Max duration: Premium (8s), Fast (20s), Budget (15s). Longer videos available in Fast mode.
                 </p>
               </div>
 

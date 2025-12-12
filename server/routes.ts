@@ -55,13 +55,14 @@ const processVideoAdvancedSchema = z.object({
 });
 
 // Phase 4: UGC Preset Generation Schema
-// Duration limits per mode: Veo3 modes max 20s, Sora2 max 15s
-// NOTE: Sora2 non-storyboard models (sora-2-image-to-video, sora-2-text-to-video)
-// only support n_frames "10" and "15" - NOT "25"
+// Duration limits per mode - PROVIDER HARD LIMITS:
+// - Mode A (nanobana+veo3): Provider hard-caps image-to-video at ~8s
+// - Mode B (veo3-only): Direct Veo3 supports up to 20s
+// - Mode C (sora2): KIE only supports n_frames "10" or "15" (not "25")
 const MODE_DURATION_LIMITS: Record<string, number> = {
-  'nanobana+veo3': 20,
+  'nanobana+veo3': 8,  // Provider hard-cap for image-to-video
   'veo3-only': 20,
-  'sora2': 15, // Limited to 15s - KIE sora-2-* models don't support n_frames "25"
+  'sora2': 15,         // KIE sora-2-* models don't support n_frames "25"
 };
 
 const generateUGCPresetSchema = z.object({
@@ -87,12 +88,21 @@ const generateUGCPresetSchema = z.object({
   // Validate duration against mode-specific limits
   const maxDuration = MODE_DURATION_LIMITS[data.generationMode] || 20;
   return data.duration <= maxDuration;
-}, (data) => ({
-  message: data.generationMode === 'sora2'
-    ? `Mode C (Sora2) supports up to 15 seconds. Selected: ${data.duration}s. Use Mode A or B for longer videos.`
-    : `Duration (${data.duration}s) exceeds maximum (${MODE_DURATION_LIMITS[data.generationMode] || 20}s) for selected mode`,
-  path: ["duration"],
-}));
+}, (data) => {
+  // Mode-specific error messages for better UX
+  const maxDuration = MODE_DURATION_LIMITS[data.generationMode] || 20;
+  let message: string;
+
+  if (data.generationMode === 'nanobana+veo3') {
+    message = `Mode A (Premium) supports up to 8 seconds. Selected: ${data.duration}s. Use Mode B (Fast) for longer videos.`;
+  } else if (data.generationMode === 'sora2') {
+    message = `Mode C (Budget) supports up to 15 seconds. Selected: ${data.duration}s. Use Mode B (Fast) for longer videos.`;
+  } else {
+    message = `Duration (${data.duration}s) exceeds maximum (${maxDuration}s) for selected mode`;
+  }
+
+  return { message, path: ["duration"] };
+});
 
 // Configure multer for file uploads (in-memory storage)
 const upload = multer({

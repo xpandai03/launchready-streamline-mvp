@@ -145,15 +145,15 @@ export const MODE_OPTIONS: ModeOption[] = [
   {
     value: "nanobana+veo3",
     label: "Mode A: Premium Quality",
-    description: "NanoBanana image → Veo3 video (best visual consistency)",
+    description: "Best visuals, short clips (~8s max)",
     badge: "RECOMMENDED",
     estimatedTime: "~2-3 min",
-    maxDuration: 20,
+    maxDuration: 8, // Provider hard-caps at ~8s for image-to-video
   },
   {
     value: "veo3-only",
     label: "Mode B: Fast",
-    description: "Veo3 direct video generation (faster, good quality)",
+    description: "Balanced quality, supports longer videos (up to 20s)",
     badge: "FASTER",
     estimatedTime: "~1-2 min",
     maxDuration: 20,
@@ -161,7 +161,7 @@ export const MODE_OPTIONS: ModeOption[] = [
   {
     value: "sora2",
     label: "Mode C: Budget",
-    description: "Sora 2 video (cheaper alternative, decent quality)",
+    description: "Budget option, strict duration limits (up to 15s)",
     badge: "CHEAPER",
     estimatedTime: "~1-2 min",
     maxDuration: 15, // Sora2 non-storyboard models only support n_frames "10" or "15"
