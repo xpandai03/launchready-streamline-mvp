@@ -168,11 +168,12 @@ export default function ContentEnginePage() {
   // Create channel config
   const createConfigMutation = useMutation({
     mutationFn: async (config: typeof newConfig) => {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/content-engine/configs', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeaders(),
+          ...authHeaders,
         },
         body: JSON.stringify(config),
       });
@@ -196,11 +197,12 @@ export default function ContentEnginePage() {
   // Generate SceneSpec
   const generateSpecMutation = useMutation({
     mutationFn: async (channelConfigId: string) => {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/content-engine/generate-spec', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeaders(),
+          ...authHeaders,
         },
         body: JSON.stringify({ channelConfigId }),
       });
@@ -222,11 +224,12 @@ export default function ContentEnginePage() {
   // Render SceneSpec
   const renderSpecMutation = useMutation({
     mutationFn: async (specId: string) => {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch(`/api/content-engine/render/${specId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeaders(),
+          ...authHeaders,
         },
         body: JSON.stringify({ provider: 'veo3' }),
       });
@@ -248,9 +251,10 @@ export default function ContentEnginePage() {
   // Delete config
   const deleteConfigMutation = useMutation({
     mutationFn: async (configId: string) => {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch(`/api/content-engine/configs/${configId}`, {
         method: 'DELETE',
-        headers: getAuthHeaders(),
+        headers: authHeaders,
       });
       if (!response.ok) {
         const error = await response.json();
