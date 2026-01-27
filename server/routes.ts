@@ -3760,13 +3760,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.userId!;
 
       // Validate input
+      // Note: defaultDuration is in seconds. Long-form content: 180s (3 min) to 600s (10 min)
       const configSchema = z.object({
         name: z.string().min(1).max(100),
         niche: z.string().min(1).max(500),
         tone: z.string().min(1).max(500),
         cadence: z.string().optional(),
-        rendererPreference: z.enum(['automation', 'code_based']).default('automation'),
-        defaultDuration: z.number().int().min(10).max(300).default(60),
+        rendererPreference: z.enum(['automation', 'code_based', 'remotion']).default('remotion'),
+        defaultDuration: z.number().int().min(10).max(600).default(300), // 10s min, 600s (10 min) max
         extraDirectives: z.record(z.any()).optional(),
         isActive: z.boolean().default(true),
       });
