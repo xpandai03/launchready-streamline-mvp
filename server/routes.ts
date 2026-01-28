@@ -11,6 +11,11 @@ import { postToSocialSchema } from "./validators/social";
 import { generateMediaSchema, validateProviderType } from "./validators/mediaGen";
 import { generateMedia, checkMediaStatus } from "./services/mediaGen";
 import { ugcVideoService } from "./services/ugcVideoService";
+import { shopifyScraperService } from "./services/shopifyScraperService";
+import { autopilotProductService } from "./services/autopilotProductService";
+import { autopilotVideoService } from "./services/autopilotVideoService";
+import { autopilotSchedulerService } from "./services/autopilotSchedulerService";
+import { autopilotStores, autopilotProducts, autopilotConfigs, autopilotHistory } from "@shared/schema";
 import { GenerationMode, generatePrompt, formatICPForPrompt, formatSceneForPrompt, type PromptVariables } from "./prompts/ugc-presets";
 import { ugcChainService } from "./services/ugcChain";
 import { supabaseAdmin } from "./services/supabaseAuth";
@@ -4357,6 +4362,765 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+  // ========================================
+  // AUTOPILOT API ENDPOINTS (Phase 1-6)
+  // Full autopilot video generation for Shopify stores
+  // ========================================
+
+  /**
+   * POST /api/autopilot/stores/scrape - Scrape products from a Shopify store
+   */
+  app.post("/api/autopilot/stores/scrape", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { shopifyUrl } = req.body;
+
+      if (!shopifyUrl || typeof shopifyUrl !== 'string') {
+        return res.status(400).json({ error: 'shopifyUrl is required' });
+      }
+
+      console.log(`[Autopilot API] Scraping store: ${shopifyUrl} for user ${userId}`);
+
+      // Scrape the store
+      const scrapeResult = await shopifyScraperService.scrapeShopifyStore(shopifyUrl);
+
+      if (!scrapeResult.success || !scrapeResult.products) {
+        return res.status(400).json({
+          error: scrapeResult.error || 'Failed to scrape store',
+        });
+      }
+
+      // Normalize domain
+      const domain = shopifyScraperService.normalizeShopifyDomain(shopifyUrl);
+
+      // Check if store already exists for this user
+      const existingStore = await db
+        .select()
+        .from(autopilotStores)
+        .where(and(
+          eq(autopilotStores.userId, userId),
+          eq(autopilotStores.shopifyDomain, domain)
+        ))
+        .limit(1);
+
+      let storeId: string;
+
+      if (existingStore.length > 0) {
+        // Update existing store
+        storeId = existingStore[0].id;
+        await db
+          .update(autopilotStores)
+          .set({
+            storeName: scrapeResult.storeName,
+            logoUrl: scrapeResult.logoUrl,
+            lastScrapedAt: new Date(),
+            productCount: scrapeResult.products.length,
+            status: 'active',
+            updatedAt: new Date(),
+          })
+          .where(eq(autopilotStores.id, storeId));
+
+        console.log(`[Autopilot API] Updated existing store: ${storeId}`);
+      } else {
+        // Create new store
+        const [newStore] = await db
+          .insert(autopilotStores)
+          .values({
+            userId,
+            shopifyDomain: domain,
+            storeName: scrapeResult.storeName,
+            logoUrl: scrapeResult.logoUrl,
+            lastScrapedAt: new Date(),
+            productCount: scrapeResult.products.length,
+            status: 'active',
+          })
+          .returning();
+
+        storeId = newStore.id;
+        console.log(`[Autopilot API] Created new store: ${storeId}`);
+      }
+
+      // Upsert products
+      let newCount = 0;
+      let updatedCount = 0;
+
+      for (const product of scrapeResult.products) {
+        const existing = await db
+          .select()
+          .from(autopilotProducts)
+          .where(and(
+            eq(autopilotProducts.storeId, storeId),
+            eq(autopilotProducts.externalId, product.externalId)
+          ))
+          .limit(1);
+
+        if (existing.length > 0) {
+          // Update existing product
+          await db
+            .update(autopilotProducts)
+            .set({
+              title: product.title,
+              description: product.description,
+              images: product.images,
+              price: product.price,
+              variants: product.variants,
+              tags: product.tags,
+              isActive: true,
+              updatedAt: new Date(),
+            })
+            .where(eq(autopilotProducts.id, existing[0].id));
+          updatedCount++;
+        } else {
+          // Insert new product
+          await db
+            .insert(autopilotProducts)
+            .values({
+              storeId,
+              externalId: product.externalId,
+              title: product.title,
+              description: product.description,
+              images: product.images,
+              price: product.price,
+              variants: product.variants,
+              tags: product.tags,
+            });
+          newCount++;
+        }
+      }
+
+      // Mark stale products as inactive
+      await autopilotProductService.removeStaleProducts(
+        storeId,
+        scrapeResult.products.map(p => p.externalId)
+      );
+
+      res.json({
+        success: true,
+        storeId,
+        storeName: scrapeResult.storeName,
+        productCount: scrapeResult.products.length,
+        newProducts: newCount,
+        updatedProducts: updatedCount,
+        usedFallback: scrapeResult.usedFallback,
+      });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error scraping store:', error);
+      res.status(500).json({
+        error: 'Internal server error',
+        details: error.message,
+      });
+    }
+  });
+
+  /**
+   * GET /api/autopilot/stores - Get user's stores
+   */
+  app.get("/api/autopilot/stores", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+
+      const stores = await db
+        .select()
+        .from(autopilotStores)
+        .where(eq(autopilotStores.userId, userId))
+        .orderBy(desc(autopilotStores.createdAt));
+
+      res.json({ stores });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error getting stores:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /api/autopilot/stores/:storeId/products - Get products for a store
+   */
+  app.get("/api/autopilot/stores/:storeId/products", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { storeId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const activeOnly = req.query.activeOnly === 'true';
+
+      // Verify store belongs to user
+      const [store] = await db
+        .select()
+        .from(autopilotStores)
+        .where(and(
+          eq(autopilotStores.id, storeId),
+          eq(autopilotStores.userId, userId)
+        ))
+        .limit(1);
+
+      if (!store) {
+        return res.status(404).json({ error: 'Store not found' });
+      }
+
+      const result = await autopilotProductService.getProducts(storeId, { limit, offset, activeOnly });
+
+      res.json({
+        products: result.products,
+        total: result.total,
+        limit,
+        offset,
+      });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error getting products:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * PATCH /api/autopilot/products/:productId - Update a product
+   */
+  app.patch("/api/autopilot/products/:productId", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { productId } = req.params;
+      const { isActive, title, description } = req.body;
+
+      // Get product and verify ownership
+      const product = await autopilotProductService.getProductById(productId);
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+
+      // Verify store belongs to user
+      const [store] = await db
+        .select()
+        .from(autopilotStores)
+        .where(and(
+          eq(autopilotStores.id, product.storeId),
+          eq(autopilotStores.userId, userId)
+        ))
+        .limit(1);
+
+      if (!store) {
+        return res.status(404).json({ error: 'Store not found' });
+      }
+
+      await autopilotProductService.updateProduct(productId, { isActive, title, description });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error updating product:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /api/autopilot/configs - Create autopilot config
+   */
+  app.post("/api/autopilot/configs", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { storeId, tone, voiceId, videosPerWeek, platforms } = req.body;
+
+      if (!storeId) {
+        return res.status(400).json({ error: 'storeId is required' });
+      }
+
+      // Verify store belongs to user
+      const [store] = await db
+        .select()
+        .from(autopilotStores)
+        .where(and(
+          eq(autopilotStores.id, storeId),
+          eq(autopilotStores.userId, userId)
+        ))
+        .limit(1);
+
+      if (!store) {
+        return res.status(404).json({ error: 'Store not found' });
+      }
+
+      // Check if config already exists
+      const existing = await db
+        .select()
+        .from(autopilotConfigs)
+        .where(eq(autopilotConfigs.storeId, storeId))
+        .limit(1);
+
+      if (existing.length > 0) {
+        // Update existing config
+        await db
+          .update(autopilotConfigs)
+          .set({
+            tone: tone || 'casual',
+            voiceId,
+            videosPerWeek: videosPerWeek || 3,
+            platforms: platforms || ['instagram'],
+            updatedAt: new Date(),
+          })
+          .where(eq(autopilotConfigs.id, existing[0].id));
+
+        return res.json({ configId: existing[0].id, updated: true });
+      }
+
+      // Create new config
+      const [config] = await db
+        .insert(autopilotConfigs)
+        .values({
+          storeId,
+          userId,
+          tone: tone || 'casual',
+          voiceId,
+          videosPerWeek: videosPerWeek || 3,
+          platforms: platforms || ['instagram'],
+        })
+        .returning();
+
+      res.json({ configId: config.id, created: true });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error creating config:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /api/autopilot/configs/:configId - Get autopilot config
+   */
+  app.get("/api/autopilot/configs/:configId", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { configId } = req.params;
+
+      const [config] = await db
+        .select()
+        .from(autopilotConfigs)
+        .where(and(
+          eq(autopilotConfigs.id, configId),
+          eq(autopilotConfigs.userId, userId)
+        ))
+        .limit(1);
+
+      if (!config) {
+        return res.status(404).json({ error: 'Config not found' });
+      }
+
+      res.json({ config });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error getting config:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /api/autopilot/configs/:configId/preview - Generate preview video
+   */
+  app.post("/api/autopilot/configs/:configId/preview", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { configId } = req.params;
+      const { productId } = req.body; // Optional: specific product to use
+
+      // Get config
+      const [config] = await db
+        .select()
+        .from(autopilotConfigs)
+        .where(and(
+          eq(autopilotConfigs.id, configId),
+          eq(autopilotConfigs.userId, userId)
+        ))
+        .limit(1);
+
+      if (!config) {
+        return res.status(404).json({ error: 'Config not found' });
+      }
+
+      // Get store
+      const [store] = await db
+        .select()
+        .from(autopilotStores)
+        .where(eq(autopilotStores.id, config.storeId))
+        .limit(1);
+
+      if (!store) {
+        return res.status(404).json({ error: 'Store not found' });
+      }
+
+      // Get product (specific or random)
+      let product;
+      if (productId) {
+        product = await autopilotProductService.getProductById(productId);
+      } else {
+        product = await autopilotProductService.getNextProduct(config.storeId);
+      }
+
+      if (!product) {
+        return res.status(400).json({ error: 'No active products available' });
+      }
+
+      const productImages = product.images as string[];
+      if (!productImages || productImages.length < 2) {
+        return res.status(400).json({ error: 'Product has insufficient images' });
+      }
+
+      // Generate preview video
+      const result = await autopilotVideoService.generateAutopilotVideo({
+        userId,
+        productName: product.title,
+        productFeatures: product.description || product.title,
+        productImages,
+        price: product.price || '$0',
+        tone: config.tone as any,
+        voiceId: config.voiceId || undefined,
+        logoUrl: store.logoUrl || undefined,
+      });
+
+      if (!result.success) {
+        return res.status(500).json({ error: result.error });
+      }
+
+      res.json({
+        success: true,
+        assetId: result.assetId,
+        productId: product.id,
+        productTitle: product.title,
+      });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error generating preview:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /api/autopilot/configs/:configId/approve - Approve first video and activate autopilot
+   */
+  app.post("/api/autopilot/configs/:configId/approve", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { configId } = req.params;
+      const { assetId } = req.body;
+
+      if (!assetId) {
+        return res.status(400).json({ error: 'assetId is required' });
+      }
+
+      // Get config
+      const [config] = await db
+        .select()
+        .from(autopilotConfigs)
+        .where(and(
+          eq(autopilotConfigs.id, configId),
+          eq(autopilotConfigs.userId, userId)
+        ))
+        .limit(1);
+
+      if (!config) {
+        return res.status(404).json({ error: 'Config not found' });
+      }
+
+      if (config.isApproved) {
+        return res.status(400).json({ error: 'Autopilot already approved' });
+      }
+
+      // Activate autopilot
+      await autopilotSchedulerService.activateAutopilot(configId, assetId);
+
+      // Get updated config
+      const [updatedConfig] = await db
+        .select()
+        .from(autopilotConfigs)
+        .where(eq(autopilotConfigs.id, configId))
+        .limit(1);
+
+      res.json({
+        success: true,
+        status: 'active',
+        nextScheduledAt: updatedConfig.nextScheduledAt,
+      });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error approving config:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /api/autopilot/configs/:configId/pause - Pause autopilot
+   */
+  app.post("/api/autopilot/configs/:configId/pause", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { configId } = req.params;
+
+      // Verify ownership
+      const [config] = await db
+        .select()
+        .from(autopilotConfigs)
+        .where(and(
+          eq(autopilotConfigs.id, configId),
+          eq(autopilotConfigs.userId, userId)
+        ))
+        .limit(1);
+
+      if (!config) {
+        return res.status(404).json({ error: 'Config not found' });
+      }
+
+      await autopilotSchedulerService.pauseAutopilot(configId);
+
+      res.json({ success: true, status: 'paused' });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error pausing autopilot:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /api/autopilot/configs/:configId/resume - Resume autopilot
+   */
+  app.post("/api/autopilot/configs/:configId/resume", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { configId } = req.params;
+
+      // Verify ownership
+      const [config] = await db
+        .select()
+        .from(autopilotConfigs)
+        .where(and(
+          eq(autopilotConfigs.id, configId),
+          eq(autopilotConfigs.userId, userId)
+        ))
+        .limit(1);
+
+      if (!config) {
+        return res.status(404).json({ error: 'Config not found' });
+      }
+
+      if (!config.isApproved) {
+        return res.status(400).json({ error: 'Cannot resume - first video not approved yet' });
+      }
+
+      await autopilotSchedulerService.resumeAutopilot(configId);
+
+      // Get updated config
+      const [updatedConfig] = await db
+        .select()
+        .from(autopilotConfigs)
+        .where(eq(autopilotConfigs.id, configId))
+        .limit(1);
+
+      res.json({
+        success: true,
+        status: 'active',
+        nextScheduledAt: updatedConfig.nextScheduledAt,
+      });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error resuming autopilot:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /api/autopilot/dashboard/:storeId - Get dashboard data
+   */
+  app.get("/api/autopilot/dashboard/:storeId", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { storeId } = req.params;
+
+      // Verify store belongs to user
+      const [store] = await db
+        .select()
+        .from(autopilotStores)
+        .where(and(
+          eq(autopilotStores.id, storeId),
+          eq(autopilotStores.userId, userId)
+        ))
+        .limit(1);
+
+      if (!store) {
+        return res.status(404).json({ error: 'Store not found' });
+      }
+
+      // Get config
+      const [config] = await db
+        .select()
+        .from(autopilotConfigs)
+        .where(eq(autopilotConfigs.storeId, storeId))
+        .limit(1);
+
+      // Get pool stats
+      const poolStats = await autopilotProductService.getPoolStats(storeId);
+
+      // Get next product
+      const nextProduct = await autopilotProductService.getNextProduct(storeId);
+
+      // Get recent history
+      const recentHistory = config ? await db
+        .select()
+        .from(autopilotHistory)
+        .where(eq(autopilotHistory.configId, config.id))
+        .orderBy(desc(autopilotHistory.createdAt))
+        .limit(10) : [];
+
+      res.json({
+        store: {
+          id: store.id,
+          name: store.storeName,
+          domain: store.shopifyDomain,
+          productCount: store.productCount,
+          lastScrapedAt: store.lastScrapedAt,
+        },
+        config: config ? {
+          id: config.id,
+          tone: config.tone,
+          videosPerWeek: config.videosPerWeek,
+          platforms: config.platforms,
+          isApproved: config.isApproved,
+          isActive: config.isActive,
+          nextScheduledAt: config.nextScheduledAt,
+        } : null,
+        stats: {
+          ...poolStats,
+          videosGenerated: config?.videosGenerated || 0,
+          videosPublished: config?.videosPublished || 0,
+          configPoolCycles: config?.poolCycles || 0,
+        },
+        upcoming: nextProduct ? {
+          nextProduct: {
+            id: nextProduct.id,
+            title: nextProduct.title,
+            images: nextProduct.images,
+          },
+          nextScheduledAt: config?.nextScheduledAt,
+        } : null,
+        recentVideos: recentHistory,
+      });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error getting dashboard:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * GET /api/autopilot/stores/:storeId/history - Get generation history
+   */
+  app.get("/api/autopilot/stores/:storeId/history", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { storeId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      // Verify store belongs to user
+      const [store] = await db
+        .select()
+        .from(autopilotStores)
+        .where(and(
+          eq(autopilotStores.id, storeId),
+          eq(autopilotStores.userId, userId)
+        ))
+        .limit(1);
+
+      if (!store) {
+        return res.status(404).json({ error: 'Store not found' });
+      }
+
+      // Get config
+      const [config] = await db
+        .select()
+        .from(autopilotConfigs)
+        .where(eq(autopilotConfigs.storeId, storeId))
+        .limit(1);
+
+      if (!config) {
+        return res.json({ videos: [], total: 0 });
+      }
+
+      const history = await db
+        .select()
+        .from(autopilotHistory)
+        .where(eq(autopilotHistory.configId, config.id))
+        .orderBy(desc(autopilotHistory.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      res.json({
+        videos: history,
+        total: history.length,
+        limit,
+        offset,
+      });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error getting history:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * POST /api/autopilot/internal/generate - Internal endpoint for cron job
+   * Called by the cron job to trigger video generation
+   */
+  app.post("/api/autopilot/internal/generate", async (req, res) => {
+    try {
+      // Verify internal key
+      const internalKey = req.headers['x-internal-key'];
+      const expectedKey = process.env.INTERNAL_API_KEY || 'internal-key';
+
+      if (internalKey !== expectedKey) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const {
+        configId,
+        productId,
+        historyId,
+        userId,
+        productName,
+        productFeatures,
+        productImages,
+        price,
+        tone,
+        voiceId,
+        logoUrl,
+      } = req.body;
+
+      // Generate video
+      const result = await autopilotVideoService.generateAutopilotVideo({
+        userId,
+        productName,
+        productFeatures,
+        productImages,
+        price,
+        tone,
+        voiceId,
+        logoUrl,
+      });
+
+      if (!result.success) {
+        // Update history record with error
+        if (historyId) {
+          await autopilotSchedulerService.updateHistoryRecord(historyId, {
+            status: 'failed',
+            errorMessage: result.error,
+          });
+        }
+        return res.status(500).json({ success: false, error: result.error });
+      }
+
+      // Update history record with asset ID
+      if (historyId) {
+        await autopilotSchedulerService.updateHistoryRecord(historyId, {
+          mediaAssetId: result.assetId,
+          status: 'generating',
+        });
+      }
+
+      res.json({ success: true, assetId: result.assetId });
+    } catch (error: any) {
+      console.error('[Autopilot API] Error in internal generate:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ========================================
+  // END AUTOPILOT API ENDPOINTS
+  // ========================================
 
   const httpServer = createServer(app);
   return httpServer;

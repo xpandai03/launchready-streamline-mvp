@@ -608,3 +608,182 @@ export interface SceneObject {
   durationHint?: number | null;
   styleHints?: Record<string, unknown> | null;
 }
+
+// ============================================
+// AUTOPILOT SYSTEM (Jan 2026)
+// Full autopilot video generation for Shopify stores
+// ============================================
+
+// Autopilot Stores - tracks connected Shopify stores
+export const autopilotStores = pgTable("autopilot_stores", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  shopifyDomain: text("shopify_domain").notNull(),
+  storeName: text("store_name"),
+  logoUrl: text("logo_url"),
+  lastScrapedAt: timestamp("last_scraped_at"),
+  productCount: integer("product_count").default(0),
+  status: text("status").notNull().default('pending'), // pending, active, paused, error
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// Autopilot Products - scraped product inventory
+export const autopilotProducts = pgTable("autopilot_products", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  storeId: uuid("store_id").notNull().references(() => autopilotStores.id, { onDelete: 'cascade' }),
+  externalId: text("external_id").notNull(), // Shopify product ID
+  title: text("title").notNull(),
+  description: text("description"),
+  images: jsonb("images").notNull(), // string[] - up to 4 image URLs
+  price: text("price"),
+  variants: jsonb("variants"), // string[] - color/size options
+  tags: jsonb("tags"), // string[] - for categorization
+  lastUsedAt: timestamp("last_used_at"),
+  useCount: integer("use_count").default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// Autopilot Configs - user's autopilot settings and style profile
+export const autopilotConfigs = pgTable("autopilot_configs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  storeId: uuid("store_id").notNull().references(() => autopilotStores.id, { onDelete: 'cascade' }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  // Style settings
+  tone: text("tone").notNull().default('casual'), // casual, professional, energetic, luxury
+  voiceId: text("voice_id"), // ElevenLabs voice ID
+  includeAvatar: boolean("include_avatar").notNull().default(false),
+  // Schedule settings
+  videosPerWeek: integer("videos_per_week").notNull().default(3),
+  platforms: jsonb("platforms"), // string[] - ["youtube", "instagram", "tiktok"]
+  // State
+  isApproved: boolean("is_approved").notNull().default(false), // First video approved?
+  isActive: boolean("is_active").notNull().default(false), // Autopilot running?
+  // Tracking
+  firstVideoAssetId: text("first_video_asset_id").references(() => mediaAssets.id),
+  nextScheduledAt: timestamp("next_scheduled_at"),
+  lastGeneratedAt: timestamp("last_generated_at"),
+  // Stats
+  videosGenerated: integer("videos_generated").notNull().default(0),
+  videosPublished: integer("videos_published").notNull().default(0),
+  poolCycles: integer("pool_cycles").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// Autopilot History - tracks generated videos and their publishing status
+export const autopilotHistory = pgTable("autopilot_history", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  configId: uuid("config_id").notNull().references(() => autopilotConfigs.id, { onDelete: 'cascade' }),
+  productId: uuid("product_id").notNull().references(() => autopilotProducts.id),
+  mediaAssetId: text("media_asset_id").references(() => mediaAssets.id),
+  status: text("status").notNull().default('pending'), // pending, generating, ready, publishing, published, failed
+  errorMessage: text("error_message"),
+  publishedPlatforms: jsonb("published_platforms"), // Record<platform, { postId, url, publishedAt }>
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  completedAt: timestamp("completed_at"),
+});
+
+// Autopilot relations
+export const autopilotStoresRelations = relations(autopilotStores, ({ one, many }) => ({
+  user: one(users, {
+    fields: [autopilotStores.userId],
+    references: [users.id],
+  }),
+  products: many(autopilotProducts),
+  configs: many(autopilotConfigs),
+}));
+
+export const autopilotProductsRelations = relations(autopilotProducts, ({ one }) => ({
+  store: one(autopilotStores, {
+    fields: [autopilotProducts.storeId],
+    references: [autopilotStores.id],
+  }),
+}));
+
+export const autopilotConfigsRelations = relations(autopilotConfigs, ({ one, many }) => ({
+  store: one(autopilotStores, {
+    fields: [autopilotConfigs.storeId],
+    references: [autopilotStores.id],
+  }),
+  user: one(users, {
+    fields: [autopilotConfigs.userId],
+    references: [users.id],
+  }),
+  firstVideoAsset: one(mediaAssets, {
+    fields: [autopilotConfigs.firstVideoAssetId],
+    references: [mediaAssets.id],
+  }),
+  history: many(autopilotHistory),
+}));
+
+export const autopilotHistoryRelations = relations(autopilotHistory, ({ one }) => ({
+  config: one(autopilotConfigs, {
+    fields: [autopilotHistory.configId],
+    references: [autopilotConfigs.id],
+  }),
+  product: one(autopilotProducts, {
+    fields: [autopilotHistory.productId],
+    references: [autopilotProducts.id],
+  }),
+  mediaAsset: one(mediaAssets, {
+    fields: [autopilotHistory.mediaAssetId],
+    references: [mediaAssets.id],
+  }),
+}));
+
+// Autopilot insert schemas
+export const insertAutopilotStoreSchema = createInsertSchema(autopilotStores, {
+  createdAt: () => z.date().optional(),
+  updatedAt: () => z.date().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAutopilotProductSchema = createInsertSchema(autopilotProducts, {
+  createdAt: () => z.date().optional(),
+  updatedAt: () => z.date().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAutopilotConfigSchema = createInsertSchema(autopilotConfigs, {
+  createdAt: () => z.date().optional(),
+  updatedAt: () => z.date().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAutopilotHistorySchema = createInsertSchema(autopilotHistory, {
+  createdAt: () => z.date().optional(),
+  completedAt: () => z.date().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Autopilot types
+export type AutopilotStore = typeof autopilotStores.$inferSelect;
+export type InsertAutopilotStore = z.infer<typeof insertAutopilotStoreSchema>;
+
+export type AutopilotProduct = typeof autopilotProducts.$inferSelect;
+export type InsertAutopilotProduct = z.infer<typeof insertAutopilotProductSchema>;
+
+export type AutopilotConfig = typeof autopilotConfigs.$inferSelect;
+export type InsertAutopilotConfig = z.infer<typeof insertAutopilotConfigSchema>;
+
+export type AutopilotHistory = typeof autopilotHistory.$inferSelect;
+export type InsertAutopilotHistory = z.infer<typeof insertAutopilotHistorySchema>;
+
+// ============================================
+// END AUTOPILOT SYSTEM
+// ============================================
