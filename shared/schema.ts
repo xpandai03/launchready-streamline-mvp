@@ -629,17 +629,30 @@ export const autopilotStores = pgTable("autopilot_stores", {
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
-// Autopilot Products - scraped product inventory
+// Autopilot Products - scraped product inventory (Shopify + Generic)
 export const autopilotProducts = pgTable("autopilot_products", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  storeId: uuid("store_id").notNull().references(() => autopilotStores.id, { onDelete: 'cascade' }),
-  externalId: text("external_id").notNull(), // Shopify product ID
+  // For Shopify products, storeId is set. For generic products, userId is used directly.
+  storeId: uuid("store_id").references(() => autopilotStores.id, { onDelete: 'cascade' }),
+  userId: uuid("user_id").references(() => users.id, { onDelete: 'cascade' }), // Direct user reference for generic products
+  externalId: text("external_id"), // Shopify product ID (nullable for generic)
   title: text("title").notNull(),
   description: text("description"),
-  images: jsonb("images").notNull(), // string[] - up to 4 image URLs
+  images: jsonb("images").notNull(), // string[] - up to 5 image URLs
   price: text("price"),
+  originalPrice: text("original_price"), // For discount display
   variants: jsonb("variants"), // string[] - color/size options
   tags: jsonb("tags"), // string[] - for categorization
+  // Generic product ingestion fields
+  sourceType: text("source_type").notNull().default('shopify'), // 'shopify' | 'generic_page'
+  sourceUrl: text("source_url"), // Original product page URL for generic products
+  benefits: jsonb("benefits"), // string[] - 3-5 benefit bullets
+  brand: text("brand"), // Brand name if extractable
+  category: text("category"), // Product category
+  dataQuality: text("data_quality"), // 'high' | 'medium' | 'low'
+  qualityFlags: jsonb("quality_flags"), // string[] - e.g., ['low_image_count', 'ai_generated_benefits']
+  extractionMetadata: jsonb("extraction_metadata"), // Full extraction source info
+  // Usage tracking
   lastUsedAt: timestamp("last_used_at"),
   useCount: integer("use_count").default(0),
   isActive: boolean("is_active").notNull().default(true),

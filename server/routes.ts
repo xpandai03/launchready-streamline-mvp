@@ -15,6 +15,9 @@ import { shopifyScraperService } from "./services/shopifyScraperService";
 import { autopilotProductService } from "./services/autopilotProductService";
 import { autopilotVideoService } from "./services/autopilotVideoService";
 import { autopilotSchedulerService } from "./services/autopilotSchedulerService";
+import { apifyCrawlerService } from "./services/apifyCrawlerService";
+import { genericProductNormalizer } from "./services/genericProductNormalizer";
+import { genericProductService } from "./services/genericProductService";
 import { autopilotStores, autopilotProducts, autopilotConfigs, autopilotHistory } from "@shared/schema";
 import { GenerationMode, generatePrompt, formatICPForPrompt, formatSceneForPrompt, type PromptVariables } from "./prompts/ugc-presets";
 import { ugcChainService } from "./services/ugcChain";
@@ -4367,6 +4370,180 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AUTOPILOT API ENDPOINTS (Phase 1-6)
   // Full autopilot video generation for Shopify stores
   // ========================================
+
+  // ----------------------------------------
+  // GENERIC PRODUCT INGESTION (Demo Mode)
+  // Supports any product page URL via Apify
+  // ----------------------------------------
+
+  /**
+   * POST /api/autopilot/ingest/generic - Ingest a product from any URL
+   * Uses Apify Website Content Crawler to scrape and normalize product data
+   */
+  app.post("/api/autopilot/ingest/generic", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { url } = req.body;
+
+      if (!url || typeof url !== 'string') {
+        return res.status(400).json({ error: 'url is required' });
+      }
+
+      // Validate URL format
+      try {
+        new URL(url);
+      } catch {
+        return res.status(400).json({ error: 'Invalid URL format' });
+      }
+
+      console.log(`[Generic Ingest API] Starting ingestion for: ${url} (user: ${userId})`);
+
+      // Step 1: Crawl the page with Apify
+      console.log('[Generic Ingest API] Step 1: Crawling with Apify...');
+      const crawlResult = await apifyCrawlerService.crawlProductPage(url);
+
+      if (!crawlResult.success || !crawlResult.data) {
+        console.error('[Generic Ingest API] Crawl failed:', crawlResult.error);
+        return res.status(400).json({
+          error: 'Failed to crawl product page',
+          details: crawlResult.error,
+        });
+      }
+
+      console.log(`[Generic Ingest API] Crawl complete in ${crawlResult.duration}ms`);
+
+      // Step 2: Normalize the crawl data
+      console.log('[Generic Ingest API] Step 2: Normalizing product data...');
+      const normalizeResult = await genericProductNormalizer.normalizeProduct(
+        crawlResult.data,
+        url
+      );
+
+      if (!normalizeResult.success || !normalizeResult.product) {
+        console.error('[Generic Ingest API] Normalization failed:', normalizeResult.error);
+        return res.status(400).json({
+          error: 'Failed to extract product from page',
+          details: normalizeResult.error,
+        });
+      }
+
+      console.log(`[Generic Ingest API] Normalized: "${normalizeResult.product.title}" (quality: ${normalizeResult.product.dataQuality})`);
+
+      // Step 3: Store the product
+      console.log('[Generic Ingest API] Step 3: Storing product...');
+      const storeResult = await genericProductService.storeGenericProduct(
+        userId,
+        normalizeResult.product
+      );
+
+      if (!storeResult.success || !storeResult.productId) {
+        console.error('[Generic Ingest API] Storage failed:', storeResult.error);
+        return res.status(500).json({
+          error: 'Failed to store product',
+          details: storeResult.error,
+        });
+      }
+
+      console.log(`[Generic Ingest API] Product stored: ${storeResult.productId}`);
+
+      // Return success with full product data
+      return res.json({
+        success: true,
+        productId: storeResult.productId,
+        product: storeResult.product,
+        crawlInfo: {
+          runId: crawlResult.runId,
+          duration: crawlResult.duration,
+        },
+      });
+    } catch (error: any) {
+      console.error('[Generic Ingest API] Unexpected error:', error);
+      return res.status(500).json({
+        error: 'Internal server error',
+        details: error.message,
+      });
+    }
+  });
+
+  /**
+   * GET /api/autopilot/products/generic - Get user's generic (non-Shopify) products
+   */
+  app.get("/api/autopilot/products/generic", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const products = await genericProductService.getUserGenericProducts(userId);
+
+      return res.json({
+        success: true,
+        products,
+        count: products.length,
+      });
+    } catch (error: any) {
+      console.error('[Generic Products API] Error:', error);
+      return res.status(500).json({
+        error: 'Failed to fetch products',
+        details: error.message,
+      });
+    }
+  });
+
+  /**
+   * GET /api/autopilot/products/generic/:productId - Get a specific generic product
+   */
+  app.get("/api/autopilot/products/generic/:productId", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { productId } = req.params;
+
+      const product = await genericProductService.getGenericProduct(productId, userId);
+
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+
+      return res.json({
+        success: true,
+        product,
+      });
+    } catch (error: any) {
+      console.error('[Generic Products API] Error:', error);
+      return res.status(500).json({
+        error: 'Failed to fetch product',
+        details: error.message,
+      });
+    }
+  });
+
+  /**
+   * DELETE /api/autopilot/products/generic/:productId - Delete a generic product
+   */
+  app.delete("/api/autopilot/products/generic/:productId", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const { productId } = req.params;
+
+      const success = await genericProductService.deleteGenericProduct(productId, userId);
+
+      if (!success) {
+        return res.status(404).json({ error: 'Product not found or could not be deleted' });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Product deleted',
+      });
+    } catch (error: any) {
+      console.error('[Generic Products API] Error:', error);
+      return res.status(500).json({
+        error: 'Failed to delete product',
+        details: error.message,
+      });
+    }
+  });
+
+  // ----------------------------------------
+  // SHOPIFY STORE INGESTION (Original Flow)
+  // ----------------------------------------
 
   /**
    * POST /api/autopilot/stores/scrape - Scrape products from a Shopify store
