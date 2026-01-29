@@ -146,6 +146,12 @@ export async function normalizeProduct(
     const og = extractOpenGraph(crawlData.metadata);
     const jsonLd = extractJsonLdProduct(crawlData.metadata);
 
+    // Debug logging
+    console.log(`[Normalizer] Metadata title: "${crawlData.metadata?.title || 'MISSING'}"`);
+    console.log(`[Normalizer] OG title: "${og.title || og['og:title'] || 'MISSING'}"`);
+    console.log(`[Normalizer] JSON-LD name: "${jsonLd?.name || 'MISSING'}"`);
+    console.log(`[Normalizer] OG keys: ${Object.keys(og).join(', ') || 'NONE'}`);
+
     // ==================== TITLE EXTRACTION ====================
     let title = '';
 
@@ -155,8 +161,8 @@ export async function normalizeProduct(
       extractionSource.titleFrom = 'jsonld';
     }
     // Priority 2: OpenGraph title
-    else if (og.title) {
-      title = cleanTitle(og.title);
+    else if (og.title || og['og:title']) {
+      title = cleanTitle(og.title || og['og:title']);
       extractionSource.titleFrom = 'og';
     }
     // Priority 3: Page title tag
@@ -172,6 +178,8 @@ export async function normalizeProduct(
         extractionSource.titleFrom = 'h1';
       }
     }
+
+    console.log(`[Normalizer] Extracted title: "${title}" (length: ${title.length})`);
 
     if (!title || title.length < 3) {
       return {
