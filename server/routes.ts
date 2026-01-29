@@ -4430,6 +4430,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`[Generic Ingest API] Crawl complete in ${crawlResult.duration}ms`);
+      console.log(`[Generic Ingest API] Crawl metadata title: "${crawlResult.data.metadata?.title}"`);
+      console.log(`[Generic Ingest API] Crawl OG count: ${crawlResult.data.metadata?.openGraph?.length || 0}`);
 
       // Step 2: Normalize the crawl data
       console.log('[Generic Ingest API] Step 2: Normalizing product data...');
