@@ -1,12 +1,9 @@
 /**
  * Autopilot Page (Jan 2026)
  *
- * Full autopilot setup and dashboard:
- * - Step 1: Connect Shopify store
- * - Step 2: Review product pool
- * - Step 3: Configure video style
- * - Step 4: Preview & approve first video
- * - Step 5: Dashboard with autopilot status
+ * Supports two ingestion modes:
+ * 1. Generic URL (Demo Mode) - Any product page via Apify crawler
+ * 2. Shopify Store - Full store integration
  */
 
 import { useState } from "react";
@@ -19,22 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import {
   Tabs,
   TabsContent,
@@ -44,23 +25,37 @@ import {
 import {
   Zap,
   Store,
-  Package,
-  Settings,
-  Play,
-  Pause,
-  CheckCircle,
+  Globe,
   Loader2,
   Plus,
-  RefreshCw,
+  CheckCircle,
   ExternalLink,
-  Video,
-  Clock,
-  BarChart3,
+  Trash2,
   Image as ImageIcon,
+  Sparkles,
+  AlertCircle,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 // ==================== TYPES ====================
+
+interface GenericProduct {
+  id: string;
+  userId: string;
+  title: string;
+  description: string | null;
+  images: string[];
+  price: string | null;
+  originalPrice: string | null;
+  benefits: string[];
+  brand: string | null;
+  category: string | null;
+  sourceUrl: string;
+  dataQuality: string | null;
+  qualityFlags: string[];
+  isActive: boolean;
+  createdAt: string;
+}
 
 interface AutopilotStore {
   id: string;
@@ -74,97 +69,91 @@ interface AutopilotStore {
   createdAt: string;
 }
 
-interface AutopilotProduct {
-  id: string;
-  storeId: string;
-  externalId: string;
-  title: string;
-  description?: string;
-  images: string[];
-  price?: string;
-  tags?: string[];
-  isActive: boolean;
-  useCount: number;
-  lastUsedAt?: string;
-}
-
-interface AutopilotConfig {
-  id: string;
-  storeId: string;
-  userId: string;
-  tone: string;
-  voiceId?: string;
-  includeAvatar: boolean;
-  videosPerWeek: number;
-  platforms: string[];
-  isApproved: boolean;
-  isActive: boolean;
-  firstVideoAssetId?: string;
-  videosGenerated: number;
-  poolCycles: number;
-  nextScheduledAt?: string;
-  lastGeneratedAt?: string;
-}
-
-interface AutopilotHistory {
-  id: string;
-  configId: string;
-  productId: string;
-  mediaAssetId?: string;
-  status: string;
-  errorMessage?: string;
-  createdAt: string;
-  completedAt?: string;
-}
-
 // ==================== MAIN COMPONENT ====================
 
 export default function AutopilotPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Setup states
-  const [shopifyUrl, setShopifyUrl] = useState("");
-  const [selectedStoreId, setSelectedStoreId] = useState<string>("");
-  const [configDialogOpen, setConfigDialogOpen] = useState(false);
-  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  // Mode selection
+  const [mode, setMode] = useState<"generic" | "shopify">("generic");
 
-  // Config form state
-  const [newConfig, setNewConfig] = useState({
-    tone: "casual",
-    videosPerWeek: 3,
-    platforms: ["tiktok", "instagram"],
-  });
+  // Generic URL input
+  const [genericUrl, setGenericUrl] = useState("");
+
+  // Shopify URL input
+  const [shopifyUrl, setShopifyUrl] = useState("");
 
   // ==================== QUERIES ====================
 
-  // Fetch user's stores
+  // Fetch user's generic products
+  const { data: genericProductsData, isLoading: genericLoading } = useQuery<{
+    products: GenericProduct[];
+    count: number;
+  }>({
+    queryKey: ["/api/autopilot/products/generic"],
+  });
+
+  // Fetch user's Shopify stores
   const { data: storesData, isLoading: storesLoading } = useQuery<{ stores: AutopilotStore[] }>({
     queryKey: ["/api/autopilot/stores"],
   });
 
-  // Fetch products for selected store
-  const { data: productsData, isLoading: productsLoading } = useQuery<{ products: AutopilotProduct[] }>({
-    queryKey: ["/api/autopilot/stores", selectedStoreId, "products"],
-    enabled: !!selectedStoreId,
-  });
-
-  // Fetch config for selected store
-  const { data: configData, isLoading: configLoading } = useQuery<{ config: AutopilotConfig | null }>({
-    queryKey: ["/api/autopilot/stores", selectedStoreId, "config"],
-    enabled: !!selectedStoreId,
-  });
-
-  // Fetch history for selected store
-  const { data: historyData } = useQuery<{ history: AutopilotHistory[] }>({
-    queryKey: ["/api/autopilot/stores", selectedStoreId, "history"],
-    enabled: !!selectedStoreId && !!configData?.config?.id,
-  });
-
   // ==================== MUTATIONS ====================
 
-  // Scrape Shopify store
-  const scrapeMutation = useMutation({
+  // Generic URL ingestion (Demo Mode)
+  const genericIngestMutation = useMutation({
+    mutationFn: async (url: string) => {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch("/api/autopilot/ingest/generic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ url }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.details || error.error || "Failed to ingest product");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/autopilot/products/generic"] });
+      setGenericUrl("");
+      toast({
+        title: "Product imported!",
+        description: `"${data.product.title}" is ready for video generation.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Import failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Delete generic product
+  const deleteGenericMutation = useMutation({
+    mutationFn: async (productId: string) => {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(`/api/autopilot/products/generic/${productId}`, {
+        method: "DELETE",
+        headers: authHeaders,
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete product");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/autopilot/products/generic"] });
+      toast({ title: "Product deleted" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Shopify store scrape
+  const shopifyScrapeMutation = useMutation({
     mutationFn: async (url: string) => {
       const authHeaders = await getAuthHeaders();
       const response = await fetch("/api/autopilot/stores/scrape", {
@@ -180,11 +169,10 @@ export default function AutopilotPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/autopilot/stores"] });
-      setSelectedStoreId(data.storeId);
       setShopifyUrl("");
       toast({
         title: "Store connected!",
-        description: `Found ${data.productCount} products from ${data.storeName || "store"}.`,
+        description: `Found ${data.productCount} products.`,
       });
     },
     onError: (error: Error) => {
@@ -192,158 +180,16 @@ export default function AutopilotPage() {
     },
   });
 
-  // Create autopilot config
-  const createConfigMutation = useMutation({
-    mutationFn: async (config: typeof newConfig & { storeId: string }) => {
-      const authHeaders = await getAuthHeaders();
-      const response = await fetch("/api/autopilot/configs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
-        body: JSON.stringify(config),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to create config");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/autopilot/stores", selectedStoreId, "config"] });
-      setConfigDialogOpen(false);
-      toast({ title: "Config created", description: "Now generate a preview video to activate autopilot." });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  // Generate preview video
-  const previewMutation = useMutation({
-    mutationFn: async (configId: string) => {
-      const authHeaders = await getAuthHeaders();
-      const response = await fetch(`/api/autopilot/configs/${configId}/preview`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to generate preview");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/autopilot/stores", selectedStoreId, "config"] });
-      setPreviewDialogOpen(true);
-      toast({ title: "Preview generating", description: "Your preview video is being generated..." });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Preview failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  // Approve and activate autopilot
-  const approveMutation = useMutation({
-    mutationFn: async (configId: string) => {
-      const authHeaders = await getAuthHeaders();
-      const response = await fetch(`/api/autopilot/configs/${configId}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to approve");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/autopilot/stores", selectedStoreId, "config"] });
-      setPreviewDialogOpen(false);
-      toast({ title: "Autopilot activated!", description: "Your videos will be generated automatically." });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Approval failed", description: error.message, variant: "destructive" });
-    },
-  });
-
-  // Pause/resume autopilot
-  const toggleAutopilotMutation = useMutation({
-    mutationFn: async ({ configId, action }: { configId: string; action: "pause" | "resume" }) => {
-      const authHeaders = await getAuthHeaders();
-      const response = await fetch(`/api/autopilot/configs/${configId}/${action}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || `Failed to ${action}`);
-      }
-      return response.json();
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/autopilot/stores", selectedStoreId, "config"] });
-      toast({
-        title: variables.action === "pause" ? "Autopilot paused" : "Autopilot resumed",
-        description: variables.action === "pause"
-          ? "Video generation has been paused."
-          : "Video generation has resumed.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  // Toggle product active status
-  const toggleProductMutation = useMutation({
-    mutationFn: async ({ productId, isActive }: { productId: string; isActive: boolean }) => {
-      const authHeaders = await getAuthHeaders();
-      const response = await fetch(`/api/autopilot/products/${productId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", ...authHeaders },
-        body: JSON.stringify({ isActive }),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to update product");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/autopilot/stores", selectedStoreId, "products"] });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  // ==================== DERIVED STATE ====================
-
-  const stores = storesData?.stores || [];
-  const products = productsData?.products || [];
-  const config = configData?.config;
-  const history = historyData?.history || [];
-  const activeProducts = products.filter(p => p.isActive);
-
-  const selectedStore = stores.find(s => s.id === selectedStoreId);
-
-  // Determine current step
-  const getCurrentStep = () => {
-    if (!selectedStore) return 1; // Connect store
-    if (products.length === 0) return 2; // Products loading/empty
-    if (!config) return 3; // Create config
-    if (!config.isApproved) return 4; // Preview & approve
-    return 5; // Dashboard
-  };
-
-  const currentStep = getCurrentStep();
-
   // ==================== RENDER ====================
+
+  const genericProducts = genericProductsData?.products || [];
+  const stores = storesData?.stores || [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       <WaveBackground />
 
-      <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl pt-24">
+      <div className="relative z-10 container mx-auto px-4 py-8 max-w-5xl pt-24">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-2">
@@ -351,64 +197,226 @@ export default function AutopilotPage() {
             Autopilot
           </h1>
           <p className="text-slate-400">
-            Connect your Shopify store and let AI generate product videos automatically.
+            Import products from any URL and generate AI-powered demo videos.
           </p>
         </div>
 
-        {/* Step Progress */}
-        <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2">
-          {[
-            { num: 1, label: "Connect Store", icon: Store },
-            { num: 2, label: "Product Pool", icon: Package },
-            { num: 3, label: "Configure Style", icon: Settings },
-            { num: 4, label: "Preview & Approve", icon: Play },
-            { num: 5, label: "Dashboard", icon: BarChart3 },
-          ].map((step, index) => (
-            <div key={step.num} className="flex items-center">
-              <div
-                className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
-                  currentStep >= step.num
-                    ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/50"
-                    : "bg-slate-800/50 text-slate-500 border border-slate-700"
-                }`}
-              >
-                <step.icon className="w-4 h-4" />
-                <span className="text-sm font-medium whitespace-nowrap">{step.label}</span>
-              </div>
-              {index < 4 && (
-                <div className={`w-8 h-0.5 mx-1 ${currentStep > step.num ? "bg-yellow-500/50" : "bg-slate-700"}`} />
-              )}
-            </div>
-          ))}
-        </div>
-
-        <Tabs defaultValue={currentStep <= 2 ? "setup" : currentStep <= 4 ? "configure" : "dashboard"} className="space-y-6">
-          <TabsList className="bg-slate-800/50">
-            <TabsTrigger value="setup" className="data-[state=active]:bg-yellow-600">
-              <Store className="w-4 h-4 mr-2" />
-              Setup
+        {/* Mode Selection Tabs */}
+        <Tabs value={mode} onValueChange={(v) => setMode(v as "generic" | "shopify")} className="space-y-6">
+          <TabsList className="bg-slate-800/50 p-1">
+            <TabsTrigger
+              value="generic"
+              className="data-[state=active]:bg-yellow-600 data-[state=active]:text-white flex items-center gap-2"
+            >
+              <Globe className="w-4 h-4" />
+              Any URL (Demo)
             </TabsTrigger>
-            <TabsTrigger value="configure" className="data-[state=active]:bg-yellow-600" disabled={!selectedStore}>
-              <Settings className="w-4 h-4 mr-2" />
-              Configure
-            </TabsTrigger>
-            <TabsTrigger value="dashboard" className="data-[state=active]:bg-yellow-600" disabled={!config?.isApproved}>
-              <BarChart3 className="w-4 h-4 mr-2" />
-              Dashboard
+            <TabsTrigger
+              value="shopify"
+              className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
+            >
+              <Store className="w-4 h-4" />
+              Shopify Store
             </TabsTrigger>
           </TabsList>
 
-          {/* ==================== SETUP TAB ==================== */}
-          <TabsContent value="setup" className="space-y-6">
-            {/* Connect Store Card */}
+          {/* ==================== GENERIC URL MODE ==================== */}
+          <TabsContent value="generic" className="space-y-6">
+            {/* Import Card */}
             <Card className="bg-slate-800/50 border-slate-700">
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
-                  <Store className="w-5 h-5 text-yellow-400" />
+                  <Globe className="w-5 h-5 text-yellow-400" />
+                  Import Product from URL
+                </CardTitle>
+                <CardDescription className="text-slate-400">
+                  Paste any product page URL. Works with WordPress, WooCommerce, Squarespace, and more.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-3">
+                  <Input
+                    value={genericUrl}
+                    onChange={(e) => setGenericUrl(e.target.value)}
+                    placeholder="https://example.com/product/your-product"
+                    className="bg-slate-900 border-slate-600 text-white flex-1"
+                    disabled={genericIngestMutation.isPending}
+                  />
+                  <Button
+                    onClick={() => genericIngestMutation.mutate(genericUrl)}
+                    disabled={genericIngestMutation.isPending || !genericUrl}
+                    className="bg-yellow-600 hover:bg-yellow-700 min-w-[120px]"
+                  >
+                    {genericIngestMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Import
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {genericIngestMutation.isPending && (
+                  <div className="mt-4 p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+                    <div className="flex items-center gap-3 text-slate-300">
+                      <Loader2 className="w-5 h-5 animate-spin text-yellow-400" />
+                      <div>
+                        <p className="font-medium">Crawling page with AI...</p>
+                        <p className="text-sm text-slate-500">This may take 15-30 seconds</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Imported Products */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-yellow-400" />
+                  Imported Products
+                </CardTitle>
+                <CardDescription className="text-slate-400">
+                  {genericProducts.length} product{genericProducts.length !== 1 ? "s" : ""} ready for video generation
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {genericLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-yellow-400" />
+                  </div>
+                ) : genericProducts.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400">
+                    <Globe className="w-16 h-16 mx-auto mb-4 opacity-30" />
+                    <p className="text-lg mb-2">No products imported yet</p>
+                    <p className="text-sm">Paste a product URL above to get started</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {genericProducts.map((product) => (
+                      <div
+                        key={product.id}
+                        className="flex gap-4 p-4 bg-slate-900/50 rounded-lg border border-slate-700"
+                      >
+                        {/* Product Image */}
+                        <div className="flex-shrink-0">
+                          {product.images[0] ? (
+                            <img
+                              src={product.images[0]}
+                              alt=""
+                              className="w-24 h-24 rounded-lg object-cover"
+                            />
+                          ) : (
+                            <div className="w-24 h-24 rounded-lg bg-slate-700 flex items-center justify-center">
+                              <ImageIcon className="w-8 h-8 text-slate-500" />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Product Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h3 className="text-white font-medium truncate">{product.title}</h3>
+                              <p className="text-slate-400 text-sm mt-1 line-clamp-2">
+                                {product.description || "No description"}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <Badge
+                                variant={
+                                  product.dataQuality === "high"
+                                    ? "default"
+                                    : product.dataQuality === "medium"
+                                    ? "secondary"
+                                    : "outline"
+                                }
+                                className={
+                                  product.dataQuality === "high"
+                                    ? "bg-green-600"
+                                    : product.dataQuality === "medium"
+                                    ? "bg-yellow-600"
+                                    : ""
+                                }
+                              >
+                                {product.dataQuality || "unknown"} quality
+                              </Badge>
+                            </div>
+                          </div>
+
+                          {/* Meta info */}
+                          <div className="flex items-center gap-4 mt-3 text-sm">
+                            {product.price && (
+                              <span className="text-green-400 font-medium">{product.price}</span>
+                            )}
+                            <span className="text-slate-500">
+                              {product.images.length} images
+                            </span>
+                            <span className="text-slate-500">
+                              {product.benefits?.length || 0} benefits
+                            </span>
+                            <span className="text-slate-500">
+                              {formatDistanceToNow(new Date(product.createdAt), { addSuffix: true })}
+                            </span>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-2 mt-3">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(product.sourceUrl, "_blank")}
+                              className="border-slate-600 text-slate-300"
+                            >
+                              <ExternalLink className="w-4 h-4 mr-1" />
+                              View Source
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => deleteGenericMutation.mutate(product.id)}
+                              disabled={deleteGenericMutation.isPending}
+                              className="border-red-800 text-red-400 hover:bg-red-950"
+                            >
+                              <Trash2 className="w-4 h-4 mr-1" />
+                              Delete
+                            </Button>
+                          </div>
+
+                          {/* Quality flags */}
+                          {product.qualityFlags && product.qualityFlags.length > 0 && (
+                            <div className="flex items-center gap-2 mt-3">
+                              <AlertCircle className="w-4 h-4 text-yellow-500" />
+                              <span className="text-xs text-yellow-500">
+                                {product.qualityFlags.join(", ")}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ==================== SHOPIFY MODE ==================== */}
+          <TabsContent value="shopify" className="space-y-6">
+            {/* Connect Shopify Card */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Store className="w-5 h-5 text-purple-400" />
                   Connect Shopify Store
                 </CardTitle>
                 <CardDescription className="text-slate-400">
-                  Enter your Shopify store URL to import your products.
+                  Import all products from your Shopify store for automated video generation.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -418,13 +426,14 @@ export default function AutopilotPage() {
                     onChange={(e) => setShopifyUrl(e.target.value)}
                     placeholder="https://your-store.myshopify.com"
                     className="bg-slate-900 border-slate-600 text-white flex-1"
+                    disabled={shopifyScrapeMutation.isPending}
                   />
                   <Button
-                    onClick={() => scrapeMutation.mutate(shopifyUrl)}
-                    disabled={scrapeMutation.isPending || !shopifyUrl}
-                    className="bg-yellow-600 hover:bg-yellow-700"
+                    onClick={() => shopifyScrapeMutation.mutate(shopifyUrl)}
+                    disabled={shopifyScrapeMutation.isPending || !shopifyUrl}
+                    className="bg-purple-600 hover:bg-purple-700"
                   >
-                    {scrapeMutation.isPending ? (
+                    {shopifyScrapeMutation.isPending ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : (
                       <Plus className="w-4 h-4 mr-2" />
@@ -439,19 +448,14 @@ export default function AutopilotPage() {
             {stores.length > 0 && (
               <Card className="bg-slate-800/50 border-slate-700">
                 <CardHeader>
-                  <CardTitle className="text-white">Your Stores</CardTitle>
+                  <CardTitle className="text-white">Connected Stores</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
                     {stores.map((store) => (
                       <div
                         key={store.id}
-                        onClick={() => setSelectedStoreId(store.id)}
-                        className={`flex items-center justify-between p-4 rounded-lg cursor-pointer transition-colors ${
-                          selectedStoreId === store.id
-                            ? "bg-yellow-500/20 border border-yellow-500/50"
-                            : "bg-slate-900/50 border border-slate-700 hover:border-slate-600"
-                        }`}
+                        className="flex items-center justify-between p-4 bg-slate-900/50 rounded-lg border border-slate-700"
                       >
                         <div className="flex items-center gap-3">
                           {store.logoUrl ? (
@@ -466,14 +470,9 @@ export default function AutopilotPage() {
                             <p className="text-slate-400 text-sm">{store.productCount} products</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Badge variant={store.status === "active" ? "default" : "secondary"}>
-                            {store.status}
-                          </Badge>
-                          {selectedStoreId === store.id && (
-                            <CheckCircle className="w-5 h-5 text-yellow-400" />
-                          )}
-                        </div>
+                        <Badge variant={store.status === "active" ? "default" : "secondary"}>
+                          {store.status}
+                        </Badge>
                       </div>
                     ))}
                   </div>
@@ -481,391 +480,14 @@ export default function AutopilotPage() {
               </Card>
             )}
 
-            {/* Product Pool */}
-            {selectedStoreId && (
-              <Card className="bg-slate-800/50 border-slate-700">
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle className="text-white flex items-center gap-2">
-                        <Package className="w-5 h-5 text-yellow-400" />
-                        Product Pool
-                      </CardTitle>
-                      <CardDescription className="text-slate-400">
-                        {activeProducts.length} of {products.length} products enabled for video generation.
-                      </CardDescription>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/autopilot/stores", selectedStoreId, "products"] })}
-                      className="border-slate-600 text-slate-300"
-                    >
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Refresh
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {productsLoading ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="w-8 h-8 animate-spin text-yellow-400" />
-                    </div>
-                  ) : products.length === 0 ? (
-                    <div className="text-center py-8 text-slate-400">
-                      <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p>No products found. Try re-scraping the store.</p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 max-h-96 overflow-y-auto">
-                      {products.map((product) => (
-                        <div
-                          key={product.id}
-                          className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
-                            product.isActive
-                              ? "bg-slate-900/50 border-slate-700"
-                              : "bg-slate-900/30 border-slate-800 opacity-60"
-                          }`}
-                        >
-                          {product.images[0] ? (
-                            <img
-                              src={product.images[0]}
-                              alt=""
-                              className="w-12 h-12 rounded-lg object-cover"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-lg bg-slate-700 flex items-center justify-center">
-                              <ImageIcon className="w-6 h-6 text-slate-500" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-white text-sm font-medium truncate">{product.title}</h4>
-                            <p className="text-slate-400 text-xs">{product.price || "No price"}</p>
-                          </div>
-                          <Switch
-                            checked={product.isActive}
-                            onCheckedChange={(checked) =>
-                              toggleProductMutation.mutate({ productId: product.id, isActive: checked })
-                            }
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
+            {stores.length === 0 && !storesLoading && (
+              <Card className="bg-slate-800/30 border-slate-700 border-dashed">
+                <CardContent className="py-12 text-center">
+                  <Store className="w-16 h-16 mx-auto mb-4 text-slate-600" />
+                  <p className="text-slate-400 text-lg mb-2">No Shopify stores connected</p>
+                  <p className="text-slate-500 text-sm">Enter your Shopify store URL above to get started</p>
                 </CardContent>
               </Card>
-            )}
-          </TabsContent>
-
-          {/* ==================== CONFIGURE TAB ==================== */}
-          <TabsContent value="configure" className="space-y-6">
-            {!config ? (
-              <Card className="bg-slate-800/50 border-slate-700">
-                <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Settings className="w-5 h-5 text-yellow-400" />
-                    Configure Video Style
-                  </CardTitle>
-                  <CardDescription className="text-slate-400">
-                    Set your preferences for automated video generation.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div>
-                      <Label className="text-slate-300">Video Tone</Label>
-                      <Select
-                        value={newConfig.tone}
-                        onValueChange={(v) => setNewConfig({ ...newConfig, tone: v })}
-                      >
-                        <SelectTrigger className="bg-slate-900 border-slate-600 text-white mt-2">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-800 border-slate-700">
-                          <SelectItem value="casual">Casual & Friendly</SelectItem>
-                          <SelectItem value="professional">Professional</SelectItem>
-                          <SelectItem value="energetic">Energetic & Exciting</SelectItem>
-                          <SelectItem value="luxury">Luxury & Premium</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label className="text-slate-300">Videos Per Week</Label>
-                      <Select
-                        value={String(newConfig.videosPerWeek)}
-                        onValueChange={(v) => setNewConfig({ ...newConfig, videosPerWeek: parseInt(v) })}
-                      >
-                        <SelectTrigger className="bg-slate-900 border-slate-600 text-white mt-2">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-800 border-slate-700">
-                          <SelectItem value="1">1 video/week</SelectItem>
-                          <SelectItem value="3">3 videos/week</SelectItem>
-                          <SelectItem value="5">5 videos/week</SelectItem>
-                          <SelectItem value="7">Daily (7/week)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label className="text-slate-300 mb-3 block">Target Platforms</Label>
-                    <div className="flex flex-wrap gap-3">
-                      {["tiktok", "instagram", "youtube", "facebook"].map((platform) => (
-                        <Button
-                          key={platform}
-                          variant={newConfig.platforms.includes(platform) ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => {
-                            const platforms = newConfig.platforms.includes(platform)
-                              ? newConfig.platforms.filter(p => p !== platform)
-                              : [...newConfig.platforms, platform];
-                            setNewConfig({ ...newConfig, platforms });
-                          }}
-                          className={newConfig.platforms.includes(platform)
-                            ? "bg-yellow-600 hover:bg-yellow-700"
-                            : "border-slate-600 text-slate-300"
-                          }
-                        >
-                          {platform.charAt(0).toUpperCase() + platform.slice(1)}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <Button
-                    onClick={() => createConfigMutation.mutate({ ...newConfig, storeId: selectedStoreId })}
-                    disabled={createConfigMutation.isPending || !selectedStoreId}
-                    className="bg-yellow-600 hover:bg-yellow-700 w-full"
-                  >
-                    {createConfigMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                    )}
-                    Save Configuration
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : !config.isApproved ? (
-              <Card className="bg-slate-800/50 border-slate-700">
-                <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Play className="w-5 h-5 text-yellow-400" />
-                    Preview & Approve
-                  </CardTitle>
-                  <CardDescription className="text-slate-400">
-                    Generate a preview video to see how your autopilot videos will look.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="bg-slate-900/50 rounded-lg p-4">
-                    <h4 className="text-white font-medium mb-3">Current Settings</h4>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div className="text-slate-400">Tone:</div>
-                      <div className="text-white capitalize">{config.tone}</div>
-                      <div className="text-slate-400">Cadence:</div>
-                      <div className="text-white">{config.videosPerWeek} videos/week</div>
-                      <div className="text-slate-400">Platforms:</div>
-                      <div className="text-white">{config.platforms?.join(", ") || "None"}</div>
-                    </div>
-                  </div>
-
-                  {config.firstVideoAssetId ? (
-                    <div className="space-y-4">
-                      <div className="bg-green-900/30 border border-green-600/50 rounded-lg p-4">
-                        <p className="text-green-300 flex items-center gap-2">
-                          <CheckCircle className="w-5 h-5" />
-                          Preview video generated! Review and approve to activate autopilot.
-                        </p>
-                      </div>
-                      <div className="flex gap-3">
-                        <Button
-                          variant="outline"
-                          onClick={() => window.open(`/details/${config.firstVideoAssetId}`, "_blank")}
-                          className="border-slate-600 text-slate-300"
-                        >
-                          <Video className="w-4 h-4 mr-2" />
-                          Watch Preview
-                        </Button>
-                        <Button
-                          onClick={() => approveMutation.mutate(config.id)}
-                          disabled={approveMutation.isPending}
-                          className="bg-green-600 hover:bg-green-700 flex-1"
-                        >
-                          {approveMutation.isPending ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                          )}
-                          Approve & Activate Autopilot
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={() => previewMutation.mutate(config.id)}
-                      disabled={previewMutation.isPending}
-                      className="bg-yellow-600 hover:bg-yellow-700 w-full"
-                    >
-                      {previewMutation.isPending ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Play className="w-4 h-4 mr-2" />
-                      )}
-                      Generate Preview Video
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="bg-green-900/30 border-green-600/50">
-                <CardContent className="py-8 text-center">
-                  <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-400" />
-                  <h3 className="text-white text-xl font-semibold mb-2">Autopilot is Active!</h3>
-                  <p className="text-slate-400 mb-4">
-                    Go to the Dashboard tab to monitor your video generation.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          {/* ==================== DASHBOARD TAB ==================== */}
-          <TabsContent value="dashboard" className="space-y-6">
-            {config?.isApproved && (
-              <>
-                {/* Status Card */}
-                <Card className="bg-slate-800/50 border-slate-700">
-                  <CardHeader>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <CardTitle className="text-white flex items-center gap-2">
-                          <Zap className={`w-5 h-5 ${config.isActive ? "text-yellow-400" : "text-slate-500"}`} />
-                          Autopilot Status
-                        </CardTitle>
-                        <CardDescription className="text-slate-400">
-                          {config.isActive ? "Actively generating videos" : "Paused"}
-                        </CardDescription>
-                      </div>
-                      <Button
-                        onClick={() =>
-                          toggleAutopilotMutation.mutate({
-                            configId: config.id,
-                            action: config.isActive ? "pause" : "resume",
-                          })
-                        }
-                        disabled={toggleAutopilotMutation.isPending}
-                        variant={config.isActive ? "outline" : "default"}
-                        className={config.isActive ? "border-slate-600 text-slate-300" : "bg-yellow-600 hover:bg-yellow-700"}
-                      >
-                        {toggleAutopilotMutation.isPending ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : config.isActive ? (
-                          <Pause className="w-4 h-4 mr-2" />
-                        ) : (
-                          <Play className="w-4 h-4 mr-2" />
-                        )}
-                        {config.isActive ? "Pause" : "Resume"}
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="bg-slate-900/50 rounded-lg p-4 text-center">
-                        <Video className="w-6 h-6 mx-auto mb-2 text-yellow-400" />
-                        <div className="text-2xl font-bold text-white">{config.videosGenerated}</div>
-                        <div className="text-slate-400 text-sm">Videos Generated</div>
-                      </div>
-                      <div className="bg-slate-900/50 rounded-lg p-4 text-center">
-                        <Package className="w-6 h-6 mx-auto mb-2 text-blue-400" />
-                        <div className="text-2xl font-bold text-white">{activeProducts.length}</div>
-                        <div className="text-slate-400 text-sm">Active Products</div>
-                      </div>
-                      <div className="bg-slate-900/50 rounded-lg p-4 text-center">
-                        <RefreshCw className="w-6 h-6 mx-auto mb-2 text-green-400" />
-                        <div className="text-2xl font-bold text-white">{config.poolCycles}</div>
-                        <div className="text-slate-400 text-sm">Pool Cycles</div>
-                      </div>
-                      <div className="bg-slate-900/50 rounded-lg p-4 text-center">
-                        <Clock className="w-6 h-6 mx-auto mb-2 text-purple-400" />
-                        <div className="text-lg font-bold text-white">
-                          {config.nextScheduledAt
-                            ? formatDistanceToNow(new Date(config.nextScheduledAt), { addSuffix: true })
-                            : "N/A"}
-                        </div>
-                        <div className="text-slate-400 text-sm">Next Video</div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Recent History */}
-                <Card className="bg-slate-800/50 border-slate-700">
-                  <CardHeader>
-                    <CardTitle className="text-white">Recent Videos</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {history.length === 0 ? (
-                      <div className="text-center py-8 text-slate-400">
-                        <Video className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                        <p>No videos generated yet. First video coming soon!</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {history.slice(0, 10).map((item) => (
-                          <div
-                            key={item.id}
-                            className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`w-2 h-2 rounded-full ${
-                                  item.status === "ready"
-                                    ? "bg-green-400"
-                                    : item.status === "failed"
-                                    ? "bg-red-400"
-                                    : "bg-yellow-400 animate-pulse"
-                                }`}
-                              />
-                              <div>
-                                <p className="text-white text-sm">Video #{item.id.slice(-6)}</p>
-                                <p className="text-slate-400 text-xs">
-                                  {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                variant={
-                                  item.status === "ready"
-                                    ? "default"
-                                    : item.status === "failed"
-                                    ? "destructive"
-                                    : "secondary"
-                                }
-                              >
-                                {item.status}
-                              </Badge>
-                              {item.mediaAssetId && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => window.open(`/details/${item.mediaAssetId}`, "_blank")}
-                                  className="border-slate-600 text-slate-300"
-                                >
-                                  <ExternalLink className="w-4 h-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </>
             )}
           </TabsContent>
         </Tabs>
