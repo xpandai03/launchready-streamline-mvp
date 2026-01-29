@@ -53,6 +53,19 @@ app.get("/api/auth/health", (req, res) => {
   });
 });
 
+// Deployment verification endpoint - check if generic product features are deployed
+app.get("/api/autopilot/status", (req, res) => {
+  res.json({
+    status: "ok",
+    version: "generic-product-ingestion-v1",
+    deployedAt: "2026-01-28",
+    features: {
+      genericProductIngestion: true,
+      apifyCrawler: !!process.env.APIFY_API_KEY,
+    },
+  });
+});
+
 (async () => {
   try {
     const server = await registerRoutes(app);
